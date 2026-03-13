@@ -1,0 +1,23 @@
+{
+  "output": {
+    "summary": "该通知要求2026届毕业生在3月15日前提交毕业资格审核材料。",
+    "normalized_category": "graduation_material_submission",
+    "action_items": ["提交毕业资格审核材料"],
+    "extracted_fields": [
+      {
+        "field_name": "deadline_at",
+        "field_value": "2026-03-15T23:59:59+08:00",
+        "confidence": 0.94
+      }
+    ],
+    "relevance_hint": "面向毕业生，与你当前身份高度相关",
+    "urgency_hint": "存在明确截止时间",
+    "risk_hint": "错过可能影响毕业审核进度",
+    "confidence": 0.9,
+    "needs_human_review": false
+  },
+  "raw_request_ref": "ai_req_001",
+  "raw_response_ref": "ai_raw_001",
+  "latency_ms": 12,
+  "metadata": {}
+}

@@ -1,0 +1,14 @@
+{
+  "log_id": "dlv_001",
+  "task_id": "task_001",
+  "decision_id": "dec_001",
+  "event_id": "evt_001",
+  "user_id": "stu_001",
+  "channel": "app_push",
+  "status": "sent",
+  "retry_count": 0,
+  "provider_message_id": "msg_abc_001",
+  "error_message": null,
+  "delivered_at": "2026-03-13T10:24:00+08:00",
+  "metadata": {}
+}

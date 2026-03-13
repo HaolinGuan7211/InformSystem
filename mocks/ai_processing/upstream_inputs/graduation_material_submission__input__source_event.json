@@ -1,0 +1,19 @@
+{
+  "event_id": "evt_001",
+  "source_id": "wecom_cs_notice_group",
+  "source_type": "wecom",
+  "source_name": "计算机学院通知群",
+  "channel_type": "group_message",
+  "title": null,
+  "content_text": "请2026届毕业生于3月15日前提交毕业资格审核材料",
+  "content_html": null,
+  "author": "辅导员A",
+  "published_at": "2026-03-13T10:20:00+08:00",
+  "collected_at": "2026-03-13T10:20:03+08:00",
+  "url": null,
+  "attachments": [],
+  "metadata": {
+    "raw_msgid": "raw_wecom_001",
+    "canonical_notice_id": "notice_grad_001"
+  }
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "category_id": "graduation",
+    "category_name": "毕业相关通知",
+    "keywords": ["毕业", "毕业资格", "毕业审核"],
+    "enabled": true,
+    "version": "category_v1"
+  },
+  {
+    "category_id": "material_submission",
+    "category_name": "材料提交通知",
+    "keywords": ["提交", "材料", "审核表"],
+    "enabled": true,
+    "version": "category_v1"
+  },
+  {
+    "category_id": "exam",
+    "category_name": "考试成绩通知",
+    "keywords": ["考试", "成绩", "补考"],
+    "enabled": true,
+    "version": "category_v1"
+  },
+  {
+    "category_id": "credit",
+    "category_name": "学分相关通知",
+    "keywords": ["学分", "认定", "讲座"],
+    "enabled": true,
+    "version": "category_v1"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "sample_id": "sample_407b3454cbfe",
+  "event_id": "evt_001",
+  "user_id": "stu_001",
+  "rule_analysis_id": "rule_001",
+  "ai_result_id": "ai_001",
+  "decision_id": "dec_001",
+  "delivery_log_id": "dlv_failed_001",
+  "outcome_label": "delivery_failed",
+  "source": "delivery_outcome",
+  "metadata": {
+    "event_title": "请2026届毕业生于3月15日前提交毕业资格审核材料",
+    "source_name": "计算机学院通知群",
+    "rule_relevance_status": "relevant",
+    "rule_categories": [
+      "graduation",
+      "material_submission"
+    ],
+    "normalized_category": "graduation_material_submission",
+    "ai_confidence": 0.9,
+    "decision_action": "push_now",
+    "priority_level": "critical",
+    "delivery_status": "failed",
+    "delivery_channel": "app_push",
+    "retry_count": 2
+  },
+  "generated_at": "2026-03-13T10:25:30+08:00"
+}

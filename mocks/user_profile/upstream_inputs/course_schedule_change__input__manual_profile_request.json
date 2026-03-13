@@ -1,0 +1,40 @@
+{
+  "user_id": "stu_002",
+  "student_id": "20260002",
+  "name": "李四",
+  "college": "计算机学院",
+  "major": "数据科学与大数据技术",
+  "grade": "2023",
+  "degree_level": "undergraduate",
+  "identity_tags": ["在读生"],
+  "graduation_stage": null,
+  "enrolled_courses": [
+    {
+      "course_id": "CS210",
+      "course_name": "数据库系统",
+      "teacher": "陈老师",
+      "semester": "2026_spring"
+    },
+    {
+      "course_id": "CS305",
+      "course_name": "机器学习导论",
+      "teacher": "王老师",
+      "semester": "2026_spring"
+    }
+  ],
+  "credit_status": {
+    "required_total": 160,
+    "completed_total": 88,
+    "pending_core_courses": ["CS305"]
+  },
+  "current_tasks": ["确认第5周调课安排"],
+  "notification_preference": {
+    "channels": ["app_push", "email"],
+    "quiet_hours": ["23:00-07:00"],
+    "digest_enabled": true,
+    "muted_categories": ["club_activity"]
+  },
+  "metadata": {
+    "profile_source": "manual_seed"
+  }
+}

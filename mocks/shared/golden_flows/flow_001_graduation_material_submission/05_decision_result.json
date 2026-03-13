@@ -1,0 +1,36 @@
+{
+  "decision_id": "dec_001",
+  "event_id": "evt_001",
+  "user_id": "stu_001",
+  "relevance_status": "relevant",
+  "priority_score": 95.0,
+  "priority_level": "critical",
+  "decision_action": "push_now",
+  "delivery_timing": "immediate",
+  "delivery_channels": ["app_push"],
+  "action_required": true,
+  "deadline_at": "2026-03-15T23:59:59+08:00",
+  "reason_summary": "毕业审核材料提交通知，与你身份匹配，且存在明确截止时间。",
+  "explanations": [
+    "规则层判定高度相关",
+    "存在明确动作要求",
+    "存在明确截止时间",
+    "AI 补充判断错过风险较高"
+  ],
+  "evidences": [
+    {
+      "source": "rule",
+      "key": "relevance_status",
+      "value": "relevant"
+    },
+    {
+      "source": "ai",
+      "key": "risk_hint",
+      "value": "错过可能影响毕业审核进度"
+    }
+  ],
+  "policy_version": "policy_v1",
+  "metadata": {},
+  "generated_at": "2026-03-13T10:23:00+08:00"
+}
+

@@ -1,0 +1,67 @@
+[
+  {
+    "policy_id": "policy_push_now_critical",
+    "policy_name": "关键即时提醒策略",
+    "enabled": true,
+    "action": "push_now",
+    "conditions": {
+      "min_priority_score": 90,
+      "relevance_status": ["relevant", "unknown"],
+      "should_continue": true
+    },
+    "channels": ["app_push"],
+    "version": "policy_v1"
+  },
+  {
+    "policy_id": "policy_push_high_high",
+    "policy_name": "高优先级提醒策略",
+    "enabled": true,
+    "action": "push_high",
+    "conditions": {
+      "min_priority_score": 75,
+      "relevance_status": ["relevant", "unknown"],
+      "should_continue": true
+    },
+    "channels": ["app_push"],
+    "version": "policy_v1"
+  },
+  {
+    "policy_id": "policy_digest_medium",
+    "policy_name": "汇总提醒策略",
+    "enabled": true,
+    "action": "digest",
+    "conditions": {
+      "min_priority_score": 55,
+      "relevance_status": ["relevant", "unknown"],
+      "should_continue": true,
+      "digest_enabled_required": true
+    },
+    "channels": ["app_push"],
+    "version": "policy_v1"
+  },
+  {
+    "policy_id": "policy_archive_low",
+    "policy_name": "低优先级归档策略",
+    "enabled": true,
+    "action": "archive",
+    "conditions": {
+      "min_priority_score": 1,
+      "relevance_status": ["relevant", "unknown"],
+      "should_continue": true
+    },
+    "channels": [],
+    "version": "policy_v1"
+  },
+  {
+    "policy_id": "policy_ignore_irrelevant",
+    "policy_name": "无关通知忽略策略",
+    "enabled": true,
+    "action": "ignore",
+    "conditions": {
+      "relevance_status": ["irrelevant"],
+      "should_continue": false
+    },
+    "channels": [],
+    "version": "policy_v1"
+  }
+]

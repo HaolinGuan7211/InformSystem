@@ -1,0 +1,37 @@
+{
+  "analysis_id": "rule_001",
+  "event_id": "evt_001",
+  "user_id": "stu_001",
+  "rule_version": "v1",
+  "candidate_categories": ["graduation", "material_submission"],
+  "matched_rules": [
+    {
+      "rule_id": "rule_grad_001",
+      "rule_name": "毕业生材料提交识别",
+      "dimension": "action",
+      "hit_type": "keyword",
+      "weight": 1.0,
+      "evidence": ["毕业生", "提交", "材料"]
+    }
+  ],
+  "extracted_signals": {
+    "audience": ["毕业生"],
+    "action_keywords": ["提交", "审核材料"],
+    "deadline_text": "3月15日前"
+  },
+  "relevance_status": "relevant",
+  "relevance_score": 0.92,
+  "action_required": true,
+  "deadline_at": "2026-03-15T23:59:59+08:00",
+  "urgency_level": "high",
+  "risk_level": "high",
+  "should_invoke_ai": true,
+  "should_continue": true,
+  "explanation": [
+    "命中毕业生身份标签",
+    "命中材料提交动作",
+    "存在明确截止时间"
+  ],
+  "metadata": {},
+  "generated_at": "2026-03-13T10:21:00+08:00"
+}

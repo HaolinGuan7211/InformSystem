@@ -1,0 +1,53 @@
+[
+  {
+    "source_id": "wecom_cs_notice_group",
+    "source_name": "计算机学院通知群",
+    "source_type": "wecom",
+    "connector_type": "wecom_webhook",
+    "enabled": true,
+    "auth_config": {
+      "token": "wecom-demo-token",
+      "require_token": false
+    },
+    "parse_config": {
+      "channel_type": "group_message",
+      "timezone": "+08:00"
+    },
+    "polling_schedule": null,
+    "authority_level": "high",
+    "priority": 100
+  },
+  {
+    "source_id": "school_website_notice",
+    "source_name": "学校官网通知",
+    "source_type": "website",
+    "connector_type": "website_html",
+    "enabled": true,
+    "auth_config": {},
+    "parse_config": {
+      "channel_type": "website_notice",
+      "timezone": "+08:00"
+    },
+    "polling_schedule": "*/30 * * * *",
+    "authority_level": "high",
+    "priority": 90,
+    "mock_data_path": "raw_inputs/website_notices.json",
+    "max_retries": 1
+  },
+  {
+    "source_id": "manual_input_default",
+    "source_name": "manual_input",
+    "source_type": "manual",
+    "connector_type": "manual_input",
+    "enabled": true,
+    "auth_config": {},
+    "parse_config": {
+      "channel_type": "manual",
+      "timezone": "+08:00"
+    },
+    "polling_schedule": null,
+    "authority_level": "medium",
+    "priority": 10
+  }
+]
+

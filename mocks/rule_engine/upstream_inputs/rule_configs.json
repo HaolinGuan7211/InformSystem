@@ -1,0 +1,108 @@
+{
+  "version": "v1",
+  "ai_gate": {
+    "invoke_on_unknown": true,
+    "invoke_on_action_with_deadline": true,
+    "invoke_on_high_risk": true,
+    "skip_on_irrelevant": true
+  },
+  "thresholds": {
+    "relevant_score": 0.7,
+    "unknown_score": 0.35,
+    "source_bonus_high": 0.1,
+    "source_bonus_medium": 0.05,
+    "source_bonus_low": 0.0
+  },
+  "rules": [
+    {
+      "rule_id": "rule_grad_identity",
+      "rule_name": "毕业生身份标签匹配",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 100,
+      "conditions": {
+        "all_keywords": ["毕业生"],
+        "profile_any": {
+          "identity_tags": ["毕业生"],
+          "graduation_stage": ["graduation_review", "graduation_application"]
+        }
+      },
+      "outputs": {
+        "dimension": "audience",
+        "hit_type": "profile_match",
+        "weight": 0.45,
+        "candidate_categories": ["graduation"],
+        "signals": {
+          "audience": ["毕业生"]
+        },
+        "explanation": "命中毕业生身份标签",
+        "emit_match": false
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_grad_001",
+      "rule_name": "毕业生材料提交识别",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 90,
+      "conditions": {
+        "all_keywords": ["提交", "材料"],
+        "any_keywords": ["毕业生"],
+        "action_keywords": ["提交", "审核材料"]
+      },
+      "outputs": {
+        "dimension": "action",
+        "hit_type": "keyword",
+        "weight": 0.2,
+        "candidate_categories": ["material_submission"],
+        "action_required": true,
+        "signals": {
+          "action_keywords": ["提交", "审核材料"]
+        },
+        "explanation": "命中材料提交动作",
+        "emit_match": true
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_explicit_deadline",
+      "rule_name": "明确截止时间识别",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 80,
+      "conditions": {
+        "requires_deadline": true
+      },
+      "outputs": {
+        "dimension": "deadline",
+        "hit_type": "regex",
+        "weight": 0.1,
+        "explanation": "存在明确截止时间",
+        "emit_match": false
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_graduation_high_risk",
+      "rule_name": "毕业审核高风险场景",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 70,
+      "conditions": {
+        "any_keywords": ["毕业资格审核", "毕业审核", "审核材料"],
+        "requires_action": true
+      },
+      "outputs": {
+        "dimension": "risk",
+        "hit_type": "keyword",
+        "weight": 0.07,
+        "candidate_categories": ["graduation"],
+        "urgency_level": "high",
+        "risk_level": "high",
+        "emit_match": false
+      },
+      "version": "v1"
+    }
+  ]
+}
