@@ -161,9 +161,3 @@ pytest backend/app/services/decision_engine/tests
 - `*.db`
 - `*.egg-info/`
 
-## 下一步建议
-
-- 继续把文档契约逐步收敛为代码中的统一 shared models
-- 将当前 SQLite 原型逐步迁移到文档约定的 PostgreSQL / Redis / Celery 方案
-- 以 golden flow 为基础补更多跨模块集成测试
-
