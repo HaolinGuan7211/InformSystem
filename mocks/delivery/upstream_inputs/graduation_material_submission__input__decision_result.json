@@ -3,18 +3,19 @@
   "event_id": "evt_001",
   "user_id": "stu_001",
   "relevance_status": "relevant",
-  "priority_score": 95.0,
+  "priority_score": 100.0,
   "priority_level": "critical",
   "decision_action": "push_now",
   "delivery_timing": "immediate",
   "delivery_channels": ["app_push"],
   "action_required": true,
   "deadline_at": "2026-03-15T23:59:59+08:00",
-  "reason_summary": "毕业审核材料提交通知，与你身份匹配，且存在明确截止时间。",
+  "reason_summary": "毕业审核材料提交通知，与你当前画像缺口匹配，且存在明确截止时间。",
   "explanations": [
     "规则层判定高度相关",
     "存在明确动作要求",
     "存在明确截止时间",
+    "命中画像 pending_items 中的待处理缺口项",
     "AI 补充判断错过风险较高"
   ],
   "evidences": [
@@ -27,9 +28,24 @@
       "source": "ai",
       "key": "risk_hint",
       "value": "错过可能影响毕业审核进度"
+    },
+    {
+      "source": "profile",
+      "key": "pending_item",
+      "value": "pending_practice_001"
+    },
+    {
+      "source": "profile",
+      "key": "identity_tag",
+      "value": "毕业生"
     }
   ],
   "policy_version": "policy_v1",
-  "metadata": {},
+  "metadata": {
+    "profile_signal_matches": {
+      "attention_signal_keys": [],
+      "pending_item_ids": ["pending_practice_001"]
+    }
+  },
   "generated_at": "2026-03-13T10:23:00+08:00"
 }

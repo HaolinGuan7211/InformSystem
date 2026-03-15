@@ -13,6 +13,12 @@ class DeliveryChannelError(Exception):
         self.retryable = retryable
 
 
+class UnsupportedDeliveryChannelError(DeliveryChannelError):
+    def __init__(self, channel: str) -> None:
+        super().__init__(f"Unsupported delivery channel: {channel}", retryable=False)
+        self.channel = channel
+
+
 class DeliveryChannelGateway(ABC):
     channel: str
 

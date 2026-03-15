@@ -1,0 +1,14 @@
+{
+  "config_id": "default",
+  "enabled": true,
+  "provider": "mock",
+  "model_name": "gpt-5-mini",
+  "prompt_version": "prompt_v1",
+  "template_path": "D:\\InformSystem\\backend\\app\\services\\ai_processing\\prompts\\notice_analysis_v1.txt",
+  "timeout_seconds": 90.0,
+  "max_retries": 1,
+  "metadata": {
+    "fallback_mode": "mock"
+  },
+  "version": "ai_runtime_v1"
+}

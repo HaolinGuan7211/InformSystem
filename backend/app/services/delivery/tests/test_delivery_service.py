@@ -170,3 +170,66 @@ async def test_delivery_service_sends_after_scheduled_time(
 
     history = await delivery_log_repository.list_by_task(sent[0].task_id)
     assert [log.status for log in history] == ["pending", "sent"]
+
+
+async def test_delivery_service_logs_failure_when_channels_are_missing(
+    delivery_service,
+    delivery_log_repository,
+    flow_inputs,
+) -> None:
+    decision = flow_inputs["decision_result"].model_copy(
+        update={
+            "decision_id": "dec_missing_channel",
+            "event_id": "evt_missing_channel",
+            "delivery_channels": [],
+        }
+    )
+    event = flow_inputs["event"].model_copy(update={"event_id": "evt_missing_channel"})
+
+    logs = await delivery_service.dispatch(
+        decision,
+        event,
+        flow_inputs["user_profile"],
+        context={"current_time": "2026-03-13T16:00:00+08:00"},
+    )
+
+    assert len(logs) == 1
+    assert logs[0].status == "failed"
+    assert logs[0].channel == "unresolved_channel"
+    assert logs[0].metadata["failure_reason"] == "missing_delivery_channels"
+
+    stored = await delivery_log_repository.get_latest_by_task(logs[0].task_id)
+    assert stored is not None
+    assert stored.model_dump() == logs[0].model_dump()
+
+
+async def test_delivery_service_logs_failure_for_unsupported_channel_without_crashing(
+    delivery_service,
+    delivery_log_repository,
+    flow_inputs,
+) -> None:
+    decision = flow_inputs["decision_result"].model_copy(
+        update={
+            "decision_id": "dec_bad_channel",
+            "event_id": "evt_bad_channel",
+            "delivery_channels": ["sms"],
+        }
+    )
+    event = flow_inputs["event"].model_copy(update={"event_id": "evt_bad_channel"})
+
+    logs = await delivery_service.dispatch(
+        decision,
+        event,
+        flow_inputs["user_profile"],
+        context={"current_time": "2026-03-13T16:05:00+08:00"},
+    )
+
+    assert len(logs) == 1
+    assert logs[0].status == "failed"
+    assert logs[0].channel == "sms"
+    assert logs[0].error_message == "Unsupported delivery channel: sms"
+    assert logs[0].metadata["failure_reason"] == "UnsupportedDeliveryChannelError"
+
+    stored = await delivery_log_repository.get_latest_by_task(logs[0].task_id)
+    assert stored is not None
+    assert stored.model_dump() == logs[0].model_dump()

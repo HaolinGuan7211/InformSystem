@@ -8,6 +8,44 @@ docs/modules/20_rule_engine_module.md
 
 ---
 
+## 13. 相关性粗筛职责补充（2026-03-15）
+
+本模块在相关性筛选主链路中的定位补充为：
+
+- 规则层是第一阶段粗筛层
+- 默认依赖简单画像和硬条件做初筛
+- 不再以“复杂画像理解主引擎”为目标继续膨胀
+
+### 13.1 规则层优先处理的画像信息
+
+规则层优先使用：
+
+- `identity_tags`
+- `degree_level`
+- `college`
+- `major`
+- `grade`
+- 明确课程命中
+- 明确当前待办命中
+
+### 13.2 规则层不继续承担的内容
+
+以下内容默认不再作为规则层扩张方向：
+
+- 培养方案模块缺口的复杂推理
+- 学业完成结构与长文本通知的复杂语义匹配
+- 依赖复杂画像切片的细粒度受众判断
+
+这些能力应转移给 AI 精筛阶段，通过 `required_profile_facets` 驱动 `ProfileContext` 选择后再处理。
+
+### 13.3 `unknown` 的解释
+
+规则层输出 `relevance_status = unknown` 时，默认解释为：
+
+**该通知通过了粗筛，但仍需要 AI 精筛进一步判断。**
+
+它不等价于最终“与你可能相关”。
+
 ## 1. 业务背景
 
 校园通知系统的核心目标，不是把所有通知都收集起来，而是尽快判断：
@@ -43,7 +81,8 @@ docs/modules/20_rule_engine_module.md
 3. **结合用户画像做相关性初判**
 4. **识别动作要求、时间信号、风险信号**
 5. **输出可解释的规则分析结果**
-6. **决定是否需要进入 AI 补充分析**
+6. **输出后续所需的画像 facet 需求**
+7. **决定是否需要进入 AI 补充分析**
 
 规则层不做这些事情：
 
@@ -93,6 +132,7 @@ docs/modules/20_rule_engine_module.md
 - 支持规则配置化，不把核心规则硬编码在流程分支里
 - 不依赖 AI 返回结果才能完成基础判断
 - 对同一输入和同一规则版本，输出应稳定一致
+- 只声明后续需要哪些画像语义，不负责自己切片画像上下文
 - 必须可单独运行和测试
 
 ---
@@ -140,6 +180,7 @@ class RuleAnalysisResult(BaseModel):
     candidate_categories: list[str] = []
     matched_rules: list[MatchedRule] = []
     extracted_signals: dict[str, Any] = {}
+    required_profile_facets: list[str] = []
     relevance_status: str
     relevance_score: float
     action_required: Optional[bool] = None
@@ -156,6 +197,7 @@ class RuleAnalysisResult(BaseModel):
 语义说明：
 
 - `relevance_status` 建议值：`relevant` / `irrelevant` / `unknown`
+- `required_profile_facets` 使用共享协议中的 `profile_facet` 枚举，描述“后续需要哪些画像语义”
 - `should_invoke_ai` 表示规则层认为需要 AI 进一步补充理解
 - `should_continue` 表示是否还值得继续送入后续模块
 
@@ -182,7 +224,34 @@ class RuleEngineService:
 
 ---
 
-### 4.3 批量接口
+### 4.3 画像切片需求语义
+
+规则层在第一阶段新增一项显式输出：
+
+- `required_profile_facets`
+
+它的作用是：
+
+- 告诉编排层和用户画像层，后续 AI 或复杂决策真正需要哪些画像上下文
+- 避免把整份 `UserProfile` 默认喂给 AI
+- 让“相关画像上下文选择”成为可测试、可审计的结构化契约
+
+典型示例：
+
+- 调课 / 考试通知：`identity_core` + `current_courses`
+- 培养方案缺口通知：`identity_core` + `academic_completion`
+- 毕业审核通知：`identity_core` + `graduation_progress`
+- 活动学分认定通知：`identity_core` + `activity_based_credit_gap`
+
+约束说明：
+
+- 规则层只输出 facet 需求，不生成 `ProfileContext`
+- 规则层不得把学校侧字段名直接写进 `required_profile_facets`
+- 若规则层无法确定，可输出保守集合，但应避免默认返回全量 facet
+
+---
+
+### 4.4 批量接口
 
 ```python
 class RuleEngineService:
@@ -201,7 +270,7 @@ class RuleEngineService:
 
 ---
 
-### 4.4 规则加载接口
+### 4.5 规则加载接口
 
 ```python
 class RuleConfigProvider:
@@ -218,15 +287,16 @@ class RuleConfigProvider:
 
 ## 5. 模块内部架构
 
-建议规则层拆成 7 个子模块：
+建议规则层拆成 8 个子模块：
 
 1. `RuleConfigLoader`
 2. `EventPreprocessor`
 3. `SignalExtractor`
 4. `AudienceMatcher`
 5. `ActionRiskEvaluator`
-6. `AITriggerGate`
-7. `RuleAnalysisRepository`
+6. `ProfileFacetPlanner`
+7. `AITriggerGate`
+8. `RuleAnalysisRepository`
 
 ---
 
@@ -367,7 +437,29 @@ class ActionRiskEvaluator:
 
 ---
 
-### 6.6 AITriggerGate
+### 6.6 ProfileFacetPlanner
+
+#### 业务背景
+
+规则层已经看过完整 `UserProfile`，但后续 AI 与复杂决策不应默认继续消费全量画像。
+
+#### 职责
+
+- 根据命中的规则、候选类别和结构化信号输出 `required_profile_facets`
+- 保证 facet 需求与共享协议枚举一致
+- 优先输出“最小够用”的画像语义集合
+
+#### 接口
+
+```python
+class ProfileFacetPlanner:
+    async def plan(self, event: SourceEvent, user_profile: UserProfile, signals: dict, matched_rules: list[MatchedRule]) -> list[str]:
+        ...
+```
+
+---
+
+### 6.7 AITriggerGate
 
 #### 业务背景
 
@@ -389,7 +481,7 @@ class AITriggerGate:
 
 ---
 
-### 6.7 RuleAnalysisRepository
+### 6.8 RuleAnalysisRepository
 
 #### 业务背景
 
@@ -507,6 +599,7 @@ class RuleAnalysisRepository:
     "action_keywords": ["提交", "审核材料"],
     "deadline_text": "3月15日前"
   },
+  "required_profile_facets": ["identity_core", "graduation_progress"],
   "relevance_status": "relevant",
   "relevance_score": 0.92,
   "action_required": true,
@@ -542,7 +635,8 @@ class RuleAnalysisRepository:
 3. 截止时间识别测试
 4. 动作要求识别测试
 5. 空标题 / 空附件 / 空画像边界测试
-6. `should_invoke_ai` 触发逻辑测试
+6. `required_profile_facets` 输出测试
+7. `should_invoke_ai` 触发逻辑测试
 
 ---
 
@@ -576,6 +670,7 @@ class RuleAnalysisRepository:
 - 规则和阈值可配置
 - 保留可解释证据
 - 支持对用户画像做基础相关性判断
+- 输出 `required_profile_facets`
 - 支持是否触发 AI 的门控判断
 
 ### 10.2 不要做
@@ -583,6 +678,7 @@ class RuleAnalysisRepository:
 - 不要在规则层直接发消息
 - 不要在规则层直接做最终推送决策
 - 不要把所有复杂语义判断都硬塞给规则
+- 不要在规则层直接切片或拼装 AI 的画像上下文
 - 不要依赖 AI 才能输出基础结果
 
 ### 10.3 推荐工程目录
@@ -625,4 +721,3 @@ backend/app/services/rule_engine/
 **规则层模块的核心业务，是对标准通知事件进行结构化分析与初筛，产出可解释、可配置、稳定的基础判断结果。**
 
 ---
-

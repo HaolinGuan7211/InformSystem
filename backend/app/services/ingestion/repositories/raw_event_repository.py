@@ -18,7 +18,7 @@ class RawEventRepository:
         with get_connection(self.database_path) as connection:
             connection.executemany(
                 """
-                INSERT OR REPLACE INTO raw_events (
+                INSERT INTO raw_events (
                     event_id,
                     source_id,
                     source_type,
@@ -37,6 +37,7 @@ class RawEventRepository:
                     content_hash,
                     unique_source_key
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(event_id) DO NOTHING
                 """,
                 [self._event_to_row(event) for event in events],
             )
@@ -121,4 +122,3 @@ class RawEventRepository:
             attachments=json.loads(row["attachments_json"]),
             metadata=json.loads(row["metadata_json"]),
         )
-

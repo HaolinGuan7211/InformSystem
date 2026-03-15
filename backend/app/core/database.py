@@ -29,6 +29,95 @@ def _ensure_columns(
         )
 
 
+def _table_sql(connection: sqlite3.Connection, table_name: str) -> str | None:
+    row = connection.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        """,
+        (table_name,),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["sql"]
+
+
+def _ensure_decision_results_append_only(connection: sqlite3.Connection) -> None:
+    table_sql = _table_sql(connection, "decision_results")
+    if not table_sql or "UNIQUE(event_id, user_id, policy_version)" not in table_sql:
+        return
+
+    connection.execute("ALTER TABLE decision_results RENAME TO decision_results_legacy")
+    connection.execute(
+        """
+        CREATE TABLE decision_results (
+            decision_id TEXT PRIMARY KEY,
+            event_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            relevance_status TEXT NOT NULL,
+            priority_score REAL NOT NULL,
+            priority_level TEXT NOT NULL,
+            decision_action TEXT NOT NULL,
+            delivery_timing TEXT NOT NULL,
+            delivery_channels_json TEXT NOT NULL DEFAULT '[]',
+            action_required INTEGER,
+            deadline_at TEXT,
+            reason_summary TEXT NOT NULL,
+            explanations_json TEXT NOT NULL DEFAULT '[]',
+            evidences_json TEXT NOT NULL DEFAULT '[]',
+            policy_version TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            generated_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO decision_results (
+            decision_id,
+            event_id,
+            user_id,
+            relevance_status,
+            priority_score,
+            priority_level,
+            decision_action,
+            delivery_timing,
+            delivery_channels_json,
+            action_required,
+            deadline_at,
+            reason_summary,
+            explanations_json,
+            evidences_json,
+            policy_version,
+            metadata_json,
+            generated_at
+        )
+        SELECT
+            decision_id,
+            event_id,
+            user_id,
+            relevance_status,
+            priority_score,
+            priority_level,
+            decision_action,
+            delivery_timing,
+            delivery_channels_json,
+            action_required,
+            deadline_at,
+            reason_summary,
+            explanations_json,
+            evidences_json,
+            policy_version,
+            metadata_json,
+            generated_at
+        FROM decision_results_legacy
+        ORDER BY generated_at ASC, rowid ASC
+        """
+    )
+    connection.execute("DROP TABLE decision_results_legacy")
+
+
 def init_database(database_path: Path) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with get_connection(database_path) as connection:
@@ -189,6 +278,7 @@ def init_database(database_path: Path) -> None:
                 candidate_categories_json TEXT NOT NULL DEFAULT '[]',
                 matched_rules_json TEXT NOT NULL DEFAULT '[]',
                 extracted_signals_json TEXT NOT NULL DEFAULT '{}',
+                required_profile_facets_json TEXT NOT NULL DEFAULT '[]',
                 relevance_status TEXT NOT NULL,
                 relevance_score REAL NOT NULL,
                 action_required INTEGER,
@@ -221,6 +311,13 @@ def init_database(database_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_rule_results_should_invoke_ai
             ON rule_analysis_results (should_invoke_ai)
             """
+        )
+        _ensure_columns(
+            connection,
+            "rule_analysis_results",
+            {
+                "required_profile_facets_json": "TEXT NOT NULL DEFAULT '[]'",
+            },
         )
         connection.execute(
             """
@@ -320,6 +417,34 @@ def init_database(database_path: Path) -> None:
         )
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS ai_runtime_configs (
+                config_id TEXT NOT NULL,
+                version TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                provider TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                template_path TEXT NOT NULL,
+                endpoint TEXT,
+                api_key TEXT,
+                timeout_seconds REAL NOT NULL DEFAULT 15.0,
+                max_retries INTEGER NOT NULL DEFAULT 0,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                config_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (config_id, version)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_ai_runtime_configs_lookup
+            ON ai_runtime_configs (config_id, version, updated_at)
+            """
+        )
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS config_change_logs (
                 change_id TEXT PRIMARY KEY,
                 config_type TEXT NOT NULL,
@@ -356,11 +481,11 @@ def init_database(database_path: Path) -> None:
                 evidences_json TEXT NOT NULL DEFAULT '[]',
                 policy_version TEXT NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
-                generated_at TEXT NOT NULL,
-                UNIQUE(event_id, user_id, policy_version)
+                generated_at TEXT NOT NULL
             )
             """
         )
+        _ensure_decision_results_append_only(connection)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_decision_results_event_id ON decision_results (event_id)"
         )

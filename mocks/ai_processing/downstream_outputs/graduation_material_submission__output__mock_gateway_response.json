@@ -10,7 +10,7 @@
         "confidence": 0.94
       }
     ],
-    "relevance_hint": "面向毕业生，与你当前身份高度相关",
+    "relevance_hint": "relevant",
     "urgency_hint": "存在明确截止时间",
     "risk_hint": "错过可能影响毕业审核进度",
     "confidence": 0.9,

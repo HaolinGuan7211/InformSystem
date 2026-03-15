@@ -6,9 +6,11 @@ from typing import Any
 
 from backend.app.services.config.cache import MemoryConfigCache
 from backend.app.services.config.models import (
+    AIRuntimeConfig,
     ConfigAction,
     ConfigChangeLog,
     ConfigType,
+    DeliveryChannelConfig,
     NotificationCategoryConfig,
     PushPolicyConfig,
     RuleBundle,
@@ -93,6 +95,52 @@ class ConfigService:
         categories = self._store.list_categories()
         self._cache.set(cache_key, categories)
         return categories
+
+    async def get_ai_runtime_config(self) -> AIRuntimeConfig:
+        return self.get_ai_runtime_config_sync()
+
+    def get_ai_runtime_config_sync(self) -> AIRuntimeConfig:
+        cache_key = "ai_runtime_configs"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        config = self._store.get_ai_runtime_config()
+        self._cache.set(cache_key, config)
+        return config
+
+    async def list_delivery_channel_configs(self) -> list[DeliveryChannelConfig]:
+        return self.list_delivery_channel_configs_sync()
+
+    def list_delivery_channel_configs_sync(self) -> list[DeliveryChannelConfig]:
+        cache_key = "delivery_channel_configs"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        configs = self._store.list_delivery_channel_configs()
+        self._cache.set(cache_key, configs)
+        return configs
+
+    async def get_delivery_channel_config(
+        self,
+        channel: str,
+    ) -> DeliveryChannelConfig | None:
+        return self.get_delivery_channel_config_sync(channel)
+
+    def get_delivery_channel_config_sync(
+        self,
+        channel: str,
+    ) -> DeliveryChannelConfig | None:
+        cache_key = f"delivery_channel:{channel}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        config = self._store.get_delivery_channel_config(channel)
+        if config is not None:
+            self._cache.set(cache_key, config)
+        return config
 
     async def get_push_policies(self) -> list[PushPolicyConfig]:
         return self.get_push_policies_sync()
@@ -181,6 +229,8 @@ class ConfigService:
             ("source_configs", seed_store.list_source_configs()),
             ("rule_configs", seed_store.get_rule_bundle()),
             ("notification_category_configs", seed_store.list_categories()),
+            ("ai_runtime_configs", seed_store.get_ai_runtime_config()),
+            ("delivery_channel_configs", seed_store.list_delivery_channel_configs()),
             ("push_policy_configs", seed_store.list_push_policies()),
         ]:
             if self._store.get_latest_change_log(config_type) is not None:
@@ -202,6 +252,12 @@ class ConfigService:
             return
         if config_type == "notification_category_configs":
             self._store.replace_categories(payload, version)
+            return
+        if config_type == "ai_runtime_configs":
+            self._store.replace_ai_runtime_config(payload)
+            return
+        if config_type == "delivery_channel_configs":
+            self._store.replace_delivery_channel_configs(payload, version)
             return
         if config_type == "push_policy_configs":
             self._store.replace_push_policies(payload, version)
@@ -245,6 +301,19 @@ class ConfigService:
             ]
             return stamped, resolved_version
 
+        if config_type == "ai_runtime_configs":
+            config = AIRuntimeConfig.model_validate(payload)
+            return config.model_copy(update={"version": resolved_version}), resolved_version
+
+        if config_type == "delivery_channel_configs":
+            items = payload.get("items") if isinstance(payload, dict) and "items" in payload else payload
+            configs = [DeliveryChannelConfig.model_validate(item) for item in items]
+            stamped = [
+                item.model_copy(update={"version": resolved_version})
+                for item in configs
+            ]
+            return stamped, resolved_version
+
         if config_type == "push_policy_configs":
             items = payload.get("items") if isinstance(payload, dict) and "items" in payload else payload
             policies = [PushPolicyConfig.model_validate(item) for item in items]
@@ -259,6 +328,8 @@ class ConfigService:
     def _serialize_payload(self, payload: Any) -> Any:
         if isinstance(payload, RuleBundle):
             return payload.model_dump(mode="json", exclude_none=True)
+        if isinstance(payload, AIRuntimeConfig):
+            return payload.model_dump(mode="json", exclude_none=True)
         if isinstance(payload, list):
             return [item.model_dump(mode="json", exclude_none=True) for item in payload]
         return payload
@@ -266,6 +337,9 @@ class ConfigService:
     def _infer_version(self, config_type: ConfigType, payload: Any) -> str:
         if isinstance(payload, RuleBundle):
             return payload.version
+
+        if hasattr(payload, "version") and getattr(payload, "version", None):
+            return getattr(payload, "version")
 
         if isinstance(payload, dict) and isinstance(payload.get("version"), str):
             return payload["version"]

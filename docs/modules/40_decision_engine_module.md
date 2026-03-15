@@ -8,6 +8,42 @@ docs/modules/40_decision_engine_module.md
 
 ---
 
+## 13. 规则粗筛与 AI 精筛合并语义补充（2026-03-15）
+
+本模块在相关性筛选主链路中的定位补充为：
+
+- 决策层必须显式合并规则粗筛与 AI 精筛
+- 决策层必须让最终文案与最终动作保持一致
+
+### 13.1 决策层必须消费 AI 负向判断
+
+至少应满足：
+
+- 规则层 `irrelevant`：直接结束链路
+- 规则层 `unknown` 且 AI `relevance_hint = irrelevant`：默认 `archive` 或 `ignore`
+- 规则层 `unknown` 且 AI `relevance_hint = uncertain`：仅在满足“值得保留关注”的条件下进入 `digest`，否则默认 `archive`
+- 规则层 `unknown` 且 AI `relevance_hint = relevant`：继续进入优先级与动作裁定
+
+### 13.2 `reason_summary` 约束
+
+`reason_summary` 是最终决策摘要，不是中间状态解释。
+
+因此：
+
+- `archive` 结果不应直接写成“与你可能相关”
+- `ignore` 结果不应保留正向相关措辞
+- 对候选但未通过精筛的通知，应明确写成“粗筛命中候选范围，但未达到保留/强触达阈值”一类文案
+
+### 13.3 文案与统计口径分离
+
+后续实验脚本和产品文案应区分：
+
+- 规则层候选态
+- 决策层归档态
+- 最终触达态
+
+不得继续把“规则层 unknown”直接翻译为最终用户语义。
+
 ## 1. 业务背景
 
 规则层和 AI 层都只能提供“分析结果”，但系统真正需要的是一个最终决定：
@@ -288,6 +324,24 @@ class PriorityCalculator:
         ...
 ```
 
+#### 第一阶段画像缺口提权规则
+
+当通知和用户当前学业 / 毕业缺口形成结构化命中时，`PriorityCalculator` 允许叠加额外画像分：
+
+- 优先消费 `credit_status.attention_signals` 与 `credit_status.pending_items`
+- 如果规则层给出了 `attention_signal_keys` / `pending_item_ids`，应优先按显式键命中
+- 未给显式键时，允许按正文、规则解释、AI 摘要和候选类别做保守关键词回退
+- 总画像加分建议封顶，避免画像信号完全压过规则主判断
+
+当前实现约定：
+
+- `attention_signals.severity`：`critical=12`、`high=10`、`medium=6`、`low=3`
+- `pending_items.priority_hint`：`critical=8`、`high=8`、`medium=5`、`low=2`
+- 两类同时命中再加 `2`
+- 总画像加分上限 `20`
+
+因此第一阶段的业务语义不是“画像只影响偏好”，而是“画像缺口可以抬升优先级，但不能绕过决策层统一裁定”。
+
 ---
 
 ### 6.4 ActionResolver
@@ -315,6 +369,12 @@ class ActionResolver:
     ) -> dict:
         ...
 ```
+
+补充约束：
+
+- 画像缺口提权后，如果优先级跨过动作阈值，允许从 `digest` 升到 `push_high`
+- 是否真的进入即时触达，仍由 `ActionResolver + ChannelResolver` 结合静默时段和策略统一决定
+- 发文层不得根据 `profile_signal_matches` 再做二次业务重判
 
 ---
 
@@ -426,18 +486,19 @@ class DecisionRepository:
   "event_id": "evt_001",
   "user_id": "stu_001",
   "relevance_status": "relevant",
-  "priority_score": 95.0,
+  "priority_score": 100.0,
   "priority_level": "critical",
   "decision_action": "push_now",
   "delivery_timing": "immediate",
   "delivery_channels": ["app_push"],
   "action_required": true,
   "deadline_at": "2026-03-15T23:59:59+08:00",
-  "reason_summary": "毕业审核材料提交通知，与你身份匹配，且存在明确截止时间。",
+  "reason_summary": "毕业审核材料提交通知，与你当前画像缺口匹配，且存在明确截止时间。",
   "explanations": [
     "规则层判定高度相关",
     "存在明确动作要求",
     "存在明确截止时间",
+    "命中画像 pending_items 中的待处理缺口项",
     "AI 补充判断错过风险较高"
   ],
   "evidences": [
@@ -449,14 +510,35 @@ class DecisionRepository:
     {
       "source": "ai",
       "key": "risk_hint",
-      "value": "错过可能影响毕业进度"
+      "value": "错过可能影响毕业审核进度"
+    },
+    {
+      "source": "profile",
+      "key": "pending_item",
+      "value": "pending_practice_001"
+    },
+    {
+      "source": "profile",
+      "key": "identity_tag",
+      "value": "毕业生"
     }
   ],
   "policy_version": "policy_v1",
-  "metadata": {},
+  "metadata": {
+    "profile_signal_matches": {
+      "attention_signal_keys": [],
+      "pending_item_ids": ["pending_practice_001"]
+    }
+  },
   "generated_at": "2026-03-13T10:23:00+08:00"
 }
 ```
+
+补充说明：
+
+- 第一阶段 golden 已允许 `DecisionResult.metadata` 写入 `profile_signal_matches`
+- 如果命中了画像缺口，`reason_summary`、`explanations`、`evidences` 和 `priority_score` 都可能与“纯身份匹配”版本不同
+- 因此更新 decision golden 时，应把共享语义理解为“当前预期业务行为”，而不是早期未消费画像信号时的历史快照
 
 ---
 
@@ -551,4 +633,3 @@ backend/app/services/decision_engine/
 **决策层模块的核心业务，是整合规则分析、AI 分析、画像和策略配置，生成统一、可执行、可解释的最终处理决策。**
 
 ---
-

@@ -16,7 +16,11 @@ from backend.app.services.decision_engine.repositories.decision_repository impor
 from backend.app.services.decision_engine.service import DecisionEngineService
 from backend.app.services.ai_processing.cache import MemoryAICache
 from backend.app.services.ai_processing.field_extractor import FieldExtractor
-from backend.app.services.ai_processing.model_gateway import HTTPModelGateway, MockModelGateway
+from backend.app.services.ai_processing.model_gateway import (
+    HTTPModelGateway,
+    KimiChatGateway,
+    MockModelGateway,
+)
 from backend.app.services.ai_processing.models import AIModelConfig
 from backend.app.services.ai_processing.prompt_builder import PromptBuilder
 from backend.app.services.ai_processing.repositories.ai_analysis_repository import (
@@ -25,6 +29,14 @@ from backend.app.services.ai_processing.repositories.ai_analysis_repository impo
 from backend.app.services.ai_processing.result_validator import ResultValidator
 from backend.app.services.ai_processing.service import AIProcessingService
 from backend.app.services.ai_processing.summary_generator import SummaryGenerator
+from backend.app.services.campus_auth.cooldown_guard import LoginCooldownGuard
+from backend.app.services.campus_auth.providers.browser_cookie_provider import (
+    BrowserCookieCampusAuthProvider,
+)
+from backend.app.services.campus_auth.providers.szu_web_provider import (
+    SzuWebCampusAuthProvider,
+)
+from backend.app.services.campus_auth.service import CampusAuthService
 from backend.app.services.config import ConfigFilePaths, ConfigService, FileConfigStore, SQLiteConfigStore
 from backend.app.services.delivery.channel_router import DeliveryChannelRouter
 from backend.app.services.delivery.digest_composer import DigestComposer
@@ -47,6 +59,32 @@ from backend.app.services.ingestion.repositories.raw_event_repository import Raw
 from backend.app.services.ingestion.scheduler import Scheduler
 from backend.app.services.ingestion.service import IngestionService
 from backend.app.services.ingestion.webhook_receiver import WebhookReceiver
+from backend.app.services.message_probe import MessageProbeService
+from backend.app.services.profile_compat.mappers.szu_mapper import SzuProfileMapper
+from backend.app.services.profile_compat.merge import ProfileMergePolicy
+from backend.app.services.profile_compat.service import ProfileCompatibilityService
+from backend.app.services.profile_sampling.auth.browser_session_provider import (
+    BrowserCookieAuthProvider,
+)
+from backend.app.services.profile_sampling.auth.offline_auth_provider import (
+    OfflineFixtureAuthProvider,
+)
+from backend.app.services.profile_sampling.auth.szu_http_cas_provider import (
+    SzuHTTPCasProvider,
+)
+from backend.app.services.profile_sampling.samplers.szu.board_identity_sampler import (
+    SzuBoardIdentitySampler,
+)
+from backend.app.services.profile_sampling.samplers.szu.academic_completion_sampler import (
+    SzuAcademicCompletionSampler,
+)
+from backend.app.services.profile_sampling.samplers.szu.hint_payload_sampler import (
+    SzuHintPayloadSampler,
+)
+from backend.app.services.profile_sampling.samplers.szu.personal_info_sampler import (
+    SzuPersonalInfoSampler,
+)
+from backend.app.services.profile_sampling.service import ProfileSamplingService
 from backend.app.services.rule_engine.action_risk_evaluator import ActionRiskEvaluator
 from backend.app.services.rule_engine.ai_trigger_gate import AITriggerGate
 from backend.app.services.rule_engine.audience_matcher import AudienceMatcher
@@ -61,9 +99,12 @@ from backend.app.services.user_profile.course_sync_adapter import CourseSyncAdap
 from backend.app.services.user_profile.credit_status_manager import CreditStatusManager
 from backend.app.services.user_profile.graduation_status_manager import GraduationStatusManager
 from backend.app.services.user_profile.preference_manager import PreferenceManager
+from backend.app.services.user_profile.profile_context_selector import ProfileContextSelector
 from backend.app.services.user_profile.repositories import SQLiteUserProfileRepository
 from backend.app.services.user_profile.service import UserProfileService
 from backend.app.services.user_profile.snapshot_builder import SnapshotBuilder
+from backend.app.workflows.profile_sync_orchestrator import ProfileSyncOrchestrator
+from backend.app.workflows.orchestrator import WorkflowOrchestrator
 
 
 @dataclass(slots=True)
@@ -78,7 +119,7 @@ class AppContainer:
     decision_repository: SQLiteDecisionRepository
     delivery_dispatch_log_repository: DeliveryLogRepository
     digest_job_repository: DigestJobRepository
-    delivery_log_repository: Any | None
+    delivery_log_repository: DeliveryLogRepository
     feedback_repository: Any | None
     optimization_sample_repository: Any | None
     user_profile_repository: SQLiteUserProfileRepository
@@ -89,8 +130,34 @@ class AppContainer:
     delivery_service: DeliveryService
     feedback_service: Any | None
     user_profile_service: UserProfileService
+    campus_auth_service: CampusAuthService
+    profile_sampling_service: ProfileSamplingService
+    profile_compatibility_service: ProfileCompatibilityService
+    profile_sync_orchestrator: ProfileSyncOrchestrator
     webhook_receiver: WebhookReceiver
     scheduler: Scheduler
+    workflow_orchestrator: WorkflowOrchestrator
+    message_probe_service: MessageProbeService
+
+
+def _resolve_ai_runtime_config(
+    settings: Settings,
+    config_service: ConfigService,
+) -> Any:
+    default_prompt_template_path = (
+        settings.project_root
+        / "backend"
+        / "app"
+        / "services"
+        / "ai_processing"
+        / "prompts"
+        / "notice_analysis_v1.txt"
+    )
+    runtime_config = config_service.get_ai_runtime_config_sync()
+    runtime_overrides = settings.resolve_ai_runtime_overrides(default_prompt_template_path)
+    if not runtime_overrides:
+        return runtime_config
+    return runtime_config.model_copy(update=runtime_overrides)
 
 
 def build_container(settings: Settings | None = None) -> AppContainer:
@@ -102,18 +169,27 @@ def build_container(settings: Settings | None = None) -> AppContainer:
             source_config_path=settings.source_config_path,
             rule_config_path=settings.rule_config_path,
             notification_category_path=settings.notification_category_path,
+            ai_runtime_config_path=settings.ai_runtime_config_path,
+            delivery_channel_config_path=settings.delivery_channel_config_path,
             push_policy_path=settings.push_policy_path,
             audit_log_path=settings.config_audit_log_path,
         )
     )
     primary_store = (
-        SQLiteConfigStore(settings.database_path)
+        SQLiteConfigStore(settings.database_path, runtime_store=seed_store)
         if settings.config_backend == "sqlite"
         else seed_store
     )
     config_service = ConfigService(primary_store)
     if settings.config_backend == "sqlite":
         config_service.ensure_seed_data(seed_store)
+    ai_runtime_config = _resolve_ai_runtime_config(settings, config_service)
+
+    delivery_channel_configs = {
+        item.channel: item.config
+        for item in config_service.list_delivery_channel_configs_sync()
+        if item.enabled
+    }
 
     source_registry = SourceRegistry(config_service)
     normalizer = Normalizer()
@@ -133,23 +209,32 @@ def build_container(settings: Settings | None = None) -> AppContainer:
     )
     ai_analysis_repository = SQLiteAIAnalysisRepository(settings.database_path)
     ai_model_config = AIModelConfig(
-        provider=settings.ai_provider,
-        model_name=settings.ai_model_name,
-        prompt_version=settings.ai_prompt_version,
-        endpoint=settings.ai_gateway_endpoint,
-        api_key=settings.ai_api_key,
+        enabled=ai_runtime_config.enabled,
+        provider=ai_runtime_config.provider,
+        model_name=ai_runtime_config.model_name,
+        prompt_version=ai_runtime_config.prompt_version,
+        endpoint=ai_runtime_config.endpoint,
+        api_key=ai_runtime_config.api_key,
+        timeout_seconds=ai_runtime_config.timeout_seconds,
+        max_retries=ai_runtime_config.max_retries,
+        metadata=ai_runtime_config.metadata,
     )
-    if settings.ai_provider == "mock":
+    if ai_runtime_config.provider == "mock":
         model_gateway = MockModelGateway()
+    elif ai_runtime_config.provider == "kimi":
+        model_gateway = KimiChatGateway(
+            base_url=ai_runtime_config.endpoint,
+            api_key=ai_runtime_config.api_key,
+        )
     else:
         model_gateway = HTTPModelGateway(
-            endpoint=settings.ai_gateway_endpoint,
-            api_key=settings.ai_api_key,
+            endpoint=ai_runtime_config.endpoint,
+            api_key=ai_runtime_config.api_key,
         )
     ai_processing_service = AIProcessingService(
         prompt_builder=PromptBuilder(
-            template_path=settings.ai_prompt_template_path,
-            prompt_version=settings.ai_prompt_version,
+            template_path=ai_runtime_config.template_path,
+            prompt_version=ai_runtime_config.prompt_version,
         ),
         model_gateway=model_gateway,
         field_extractor=FieldExtractor(),
@@ -193,8 +278,9 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         digest_composer=digest_composer,
         log_repository=delivery_dispatch_log_repository,
         timezone_offset=settings.timezone,
+        default_channel_configs=delivery_channel_configs,
     )
-    delivery_log_repository = None
+    delivery_log_repository = delivery_dispatch_log_repository
     feedback_repository = None
     optimization_sample_repository = None
     feedback_service = None
@@ -202,9 +288,6 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         from backend.app.services.feedback.delivery_outcome_collector import DeliveryOutcomeCollector
         from backend.app.services.feedback.exporter import FeedbackExporter
         from backend.app.services.feedback.receiver import FeedbackReceiver
-        from backend.app.services.feedback.repositories.delivery_log_repository import (
-            SQLiteDeliveryLogRepository,
-        )
         from backend.app.services.feedback.repositories.feedback_repository import (
             SQLiteFeedbackRepository,
         )
@@ -216,7 +299,6 @@ def build_container(settings: Settings | None = None) -> AppContainer:
     except ModuleNotFoundError:
         pass
     else:
-        delivery_log_repository = SQLiteDeliveryLogRepository(settings.database_path, settings.timezone)
         feedback_repository = SQLiteFeedbackRepository(settings.database_path)
         optimization_sample_repository = SQLiteOptimizationSampleRepository(settings.database_path)
         sample_assembler = SampleAssembler(
@@ -250,9 +332,101 @@ def build_container(settings: Settings | None = None) -> AppContainer:
             graduation_status_manager=GraduationStatusManager(user_profile_repository),
             preference_manager=PreferenceManager(user_profile_repository),
         ),
+        profile_context_selector=ProfileContextSelector(settings.timezone),
+    )
+    campus_auth_service = CampusAuthService()
+    campus_auth_service.register_provider(
+        school_code="szu",
+        auth_mode="browser_cookie_import",
+        provider=BrowserCookieCampusAuthProvider(),
+    )
+    campus_auth_service.register_provider(
+        school_code="szu",
+        auth_mode="cli_cas",
+        provider=SzuWebCampusAuthProvider(
+            cooldown_guard=LoginCooldownGuard(
+                settings.data_dir / "campus_auth_cooldowns.json",
+            )
+        ),
+    )
+    profile_sampling_service = ProfileSamplingService()
+    profile_sampling_service.register_auth_provider(
+        school_code="szu",
+        auth_mode="offline_fixture",
+        provider=OfflineFixtureAuthProvider(),
+    )
+    profile_sampling_service.register_auth_provider(
+        school_code="szu",
+        auth_mode="browser_cookie_import",
+        provider=BrowserCookieAuthProvider(
+            campus_auth_service=campus_auth_service,
+            school_code="szu",
+            target_system="board",
+            entry_url="https://www1.szu.edu.cn/board/",
+        ),
+    )
+    profile_sampling_service.register_auth_provider(
+        school_code="szu",
+        auth_mode="browser_cookie_import_ehall",
+        provider=BrowserCookieAuthProvider(
+            campus_auth_service=campus_auth_service,
+            school_code="szu",
+            target_system="ehall",
+            entry_url="https://ehall.szu.edu.cn/appShow?appId=4980269146247992",
+        ),
+    )
+    profile_sampling_service.register_auth_provider(
+        school_code="szu",
+        auth_mode="szu_http_cas",
+        provider=SzuHTTPCasProvider(
+            campus_auth_service=campus_auth_service,
+            target_system="board",
+            entry_url="https://www1.szu.edu.cn/board/",
+        ),
+    )
+    profile_sampling_service.register_auth_provider(
+        school_code="szu",
+        auth_mode="szu_http_cas_ehall",
+        provider=SzuHTTPCasProvider(
+            campus_auth_service=campus_auth_service,
+            target_system="ehall",
+            entry_url="https://ehall.szu.edu.cn/appShow?appId=4980269146247992",
+        ),
+    )
+    profile_sampling_service.register_sampler("szu", SzuHintPayloadSampler())
+    profile_sampling_service.register_sampler("szu", SzuBoardIdentitySampler())
+    profile_sampling_service.register_sampler("szu", SzuPersonalInfoSampler())
+    profile_sampling_service.register_sampler("szu", SzuAcademicCompletionSampler())
+    profile_compatibility_service = ProfileCompatibilityService()
+    profile_compatibility_service.register_mapper(
+        "szu",
+        SzuProfileMapper(merge_policy=ProfileMergePolicy()),
+    )
+    profile_sync_orchestrator = ProfileSyncOrchestrator(
+        sampling_service=profile_sampling_service,
+        compatibility_service=profile_compatibility_service,
+        user_profile_repository=user_profile_repository,
+        user_profile_service=user_profile_service,
     )
     webhook_receiver = WebhookReceiver(source_registry, connector_manager, ingestion_service)
     scheduler = Scheduler(source_registry, connector_manager, ingestion_service)
+    workflow_orchestrator = WorkflowOrchestrator(
+        raw_event_repository=raw_event_repository,
+        user_profile_service=user_profile_service,
+        rule_engine_service=rule_engine_service,
+        ai_processing_service=ai_processing_service,
+        decision_service=decision_service,
+        delivery_service=delivery_service,
+        feedback_service=feedback_service,
+    )
+    message_probe_service = MessageProbeService(
+        source_registry=source_registry,
+        connector_manager=connector_manager,
+        ingestion_service=ingestion_service,
+        workflow_orchestrator=workflow_orchestrator,
+        user_profile_service=user_profile_service,
+        timezone_offset=settings.timezone,
+    )
 
     return AppContainer(
         settings=settings,
@@ -276,6 +450,12 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         delivery_service=delivery_service,
         feedback_service=feedback_service,
         user_profile_service=user_profile_service,
+        campus_auth_service=campus_auth_service,
+        profile_sampling_service=profile_sampling_service,
+        profile_compatibility_service=profile_compatibility_service,
+        profile_sync_orchestrator=profile_sync_orchestrator,
         webhook_receiver=webhook_receiver,
         scheduler=scheduler,
+        workflow_orchestrator=workflow_orchestrator,
+        message_probe_service=message_probe_service,
     )

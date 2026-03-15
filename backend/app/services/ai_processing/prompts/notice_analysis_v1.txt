@@ -19,6 +19,16 @@
 4. 不要泄漏原始模型思维过程。
 5. 如果信息不足，可以留空，但不要编造。
 6. prompt_version 固定为 {prompt_version}。
+7. `publisher != audience`：发布单位只说明谁发了通知，不代表当前用户就是目标受众。
+8. `公示 / 名单 / 结果 != 申请 / 报名 / 招募`：评审结果、公示、名单、通报通常不等于当前用户需要行动；申请、报名、招募、选拔才更可能是行动型通知。
+9. “内部会议 / 工作部署 / 党务学习 / 部门推进”默认不是普通学生的个人相关通知，除非上下文明确指出当前用户就是参会或执行对象。
+10. “教职工 / 留学生 / 研究生 / 毕业生”等身份词必须与 `ProfileContext` 中的用户画像做严格比对；不匹配时不要给 `relevant`。
+11. 如果通知只是别的学院或部门发布的结果公示、名单公告或内部安排，且没有证据表明与当前用户直接相关，优先输出 `irrelevant` 或 `uncertain`，不要轻易输出 `relevant`。
+12. `relevant` 必须有“用户级证据”，至少满足一类：明确受众包含当前用户、当前任务直接匹配、当前课程直接匹配、学分/毕业缺口直接匹配、或当前用户需要立即行动。
+13. 公共讲座、访问学者信息、义诊/医保/一般公共服务、公共公告、一般展示/评优活动、停水停电等泛校园基础设施通知，在缺少用户级证据时默认输出 `uncertain`，不要只因主题有用就输出 `relevant`。
+14. 成绩公布、补考/缓考结果、名单/结果类通知，如果没有课程命中、考试参与证据或明确个人命中，优先输出 `uncertain` 或 `irrelevant`，不要把“学生可能关心”当成“与你明确相关”。
+15. 对创新创业短课、通识课、研习营、校级展示活动等开放型机会，不要仅因为 `publisher` 与用户学院不同就判负；若面向对象较宽但缺少用户级证据，优先输出 `uncertain`，而不是 `relevant`。
+16. 当证据不足时，优先输出 `irrelevant` 或 `uncertain`，不要靠主题相近就输出 `relevant`。
 
 SourceEvent:
 {event_json}
@@ -26,5 +36,8 @@ SourceEvent:
 RuleAnalysisResult:
 {rule_result_json}
 
-UserProfile:
-{user_profile_json}
+Stage1Result:
+{stage1_result_json}
+
+ProfileContext:
+{profile_context_json}

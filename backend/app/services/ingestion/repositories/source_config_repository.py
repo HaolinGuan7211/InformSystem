@@ -98,9 +98,11 @@ class SQLiteSourceConfigRepository(SourceConfigRepository):
                     polling_schedule,
                     authority_level,
                     priority,
+                    version,
                     config_json,
+                    created_at,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(source_id) DO UPDATE SET
                     source_name = excluded.source_name,
                     source_type = excluded.source_type,
@@ -111,6 +113,7 @@ class SQLiteSourceConfigRepository(SourceConfigRepository):
                     polling_schedule = excluded.polling_schedule,
                     authority_level = excluded.authority_level,
                     priority = excluded.priority,
+                    version = excluded.version,
                     config_json = excluded.config_json,
                     updated_at = excluded.updated_at
                 """,
@@ -126,7 +129,9 @@ class SQLiteSourceConfigRepository(SourceConfigRepository):
                         config.get("polling_schedule"),
                         config.get("authority_level"),
                         config.get("priority", 0),
+                        config.get("version"),
                         json.dumps(config, ensure_ascii=False),
+                        timestamp,
                         timestamp,
                     )
                     for config in source_configs
@@ -161,9 +166,11 @@ def bootstrap_source_configs_if_empty(database_path: Path, source_config_path: P
                 polling_schedule,
                 authority_level,
                 priority,
+                version,
                 config_json,
+                created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -177,11 +184,12 @@ def bootstrap_source_configs_if_empty(database_path: Path, source_config_path: P
                     config.get("polling_schedule"),
                     config.get("authority_level"),
                     config.get("priority", 0),
+                    config.get("version"),
                     json.dumps(config, ensure_ascii=False),
+                    timestamp,
                     timestamp,
                 )
                 for config in configs
             ],
         )
         connection.commit()
-

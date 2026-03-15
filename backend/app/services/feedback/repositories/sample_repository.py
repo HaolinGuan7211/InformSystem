@@ -15,7 +15,7 @@ class SQLiteOptimizationSampleRepository:
         with get_connection(self.database_path) as connection:
             connection.execute(
                 """
-                INSERT OR REPLACE INTO optimization_samples (
+                INSERT OR IGNORE INTO optimization_samples (
                     sample_id,
                     event_id,
                     user_id,

@@ -82,6 +82,22 @@ class SQLiteUserProfileRepository:
             }
         )
 
+    async def get_by_student_id(self, student_id: str) -> UserProfile | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT user_id
+                FROM user_profiles
+                WHERE student_id = ?
+                """,
+                (student_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return await self.get_by_user_id(row["user_id"])
+
     async def get_base_profile(self, user_id: str) -> UserProfile | None:
         with get_connection(self.database_path) as connection:
             row = connection.execute(

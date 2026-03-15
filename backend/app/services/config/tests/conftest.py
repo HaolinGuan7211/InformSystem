@@ -24,6 +24,16 @@ def config_test_settings(tmp_path: Path) -> Settings:
         / "config"
         / "downstream_outputs"
         / "notification_categories.json",
+        ai_runtime_config_path=PROJECT_ROOT
+        / "mocks"
+        / "config"
+        / "downstream_outputs"
+        / "ai_runtime_config.json",
+        delivery_channel_config_path=PROJECT_ROOT
+        / "mocks"
+        / "config"
+        / "downstream_outputs"
+        / "delivery_channel_configs.json",
         push_policy_path=PROJECT_ROOT / "mocks" / "config" / "downstream_outputs" / "push_policies.json",
         config_audit_log_path=tmp_path / "config" / "change_logs.json",
     )
@@ -39,6 +49,8 @@ def sqlite_config_service(config_test_settings: Settings) -> ConfigService:
             source_config_path=config_test_settings.source_config_path,
             rule_config_path=config_test_settings.rule_config_path,
             notification_category_path=config_test_settings.notification_category_path,
+            ai_runtime_config_path=config_test_settings.ai_runtime_config_path,
+            delivery_channel_config_path=config_test_settings.delivery_channel_config_path,
             push_policy_path=config_test_settings.push_policy_path,
             audit_log_path=config_test_settings.config_audit_log_path,
         )
@@ -53,6 +65,8 @@ def file_config_service(tmp_path: Path, config_test_settings: Settings) -> Confi
     source_path = tmp_path / "config" / "source_configs.json"
     rule_path = tmp_path / "config" / "rule_configs.json"
     category_path = tmp_path / "config" / "notification_categories.json"
+    ai_runtime_path = tmp_path / "config" / "ai_runtime_config.json"
+    delivery_channel_path = tmp_path / "config" / "delivery_channel_configs.json"
     policy_path = tmp_path / "config" / "push_policies.json"
     audit_log_path = tmp_path / "config" / "change_logs.json"
 
@@ -61,6 +75,8 @@ def file_config_service(tmp_path: Path, config_test_settings: Settings) -> Confi
             source_config_path=config_test_settings.source_config_path,
             rule_config_path=config_test_settings.rule_config_path,
             notification_category_path=config_test_settings.notification_category_path,
+            ai_runtime_config_path=config_test_settings.ai_runtime_config_path,
+            delivery_channel_config_path=config_test_settings.delivery_channel_config_path,
             push_policy_path=config_test_settings.push_policy_path,
             audit_log_path=config_test_settings.config_audit_log_path,
         )
@@ -70,6 +86,8 @@ def file_config_service(tmp_path: Path, config_test_settings: Settings) -> Confi
             source_config_path=source_path,
             rule_config_path=rule_path,
             notification_category_path=category_path,
+            ai_runtime_config_path=ai_runtime_path,
+            delivery_channel_config_path=delivery_channel_path,
             push_policy_path=policy_path,
             audit_log_path=audit_log_path,
         )

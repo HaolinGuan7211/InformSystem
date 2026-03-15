@@ -36,6 +36,19 @@ class DeliveryLogRepository:
             )
             connection.commit()
 
+    async def get_by_log_id(self, log_id: str) -> DeliveryLog | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM delivery_logs
+                WHERE log_id = ?
+                LIMIT 1
+                """,
+                (log_id,),
+            ).fetchone()
+        return self._row_to_log(row) if row else None
+
     async def save_many(self, logs: list[DeliveryLog], created_at: str | None = None) -> None:
         if not logs:
             return
@@ -69,10 +82,28 @@ class DeliveryLogRepository:
                 SELECT *
                 FROM delivery_logs
                 WHERE task_id = ?
-                ORDER BY created_at DESC, rowid DESC
+                ORDER BY COALESCE(delivered_at, created_at) DESC, created_at DESC, rowid DESC
                 LIMIT 1
                 """,
                 (task_id,),
+            ).fetchone()
+        return self._row_to_log(row) if row else None
+
+    async def get_latest_by_event_and_user(
+        self,
+        event_id: str,
+        user_id: str,
+    ) -> DeliveryLog | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM delivery_logs
+                WHERE event_id = ? AND user_id = ?
+                ORDER BY COALESCE(delivered_at, created_at) DESC, created_at DESC, rowid DESC
+                LIMIT 1
+                """,
+                (event_id, user_id),
             ).fetchone()
         return self._row_to_log(row) if row else None
 
@@ -83,7 +114,7 @@ class DeliveryLogRepository:
                 SELECT *
                 FROM delivery_logs
                 WHERE task_id = ? AND status IN ('sent', 'skipped')
-                ORDER BY created_at DESC, rowid DESC
+                ORDER BY COALESCE(delivered_at, created_at) DESC, created_at DESC, rowid DESC
                 LIMIT 1
                 """,
                 (task_id,),
@@ -110,7 +141,7 @@ class DeliveryLogRepository:
                 SELECT *
                 FROM delivery_logs
                 WHERE user_id = ?
-                ORDER BY created_at DESC, rowid DESC
+                ORDER BY COALESCE(delivered_at, created_at) DESC, created_at DESC, rowid DESC
                 LIMIT ?
                 """,
                 (user_id, limit),
@@ -135,17 +166,19 @@ class DeliveryLogRepository:
         )
 
     def _row_to_log(self, row) -> DeliveryLog:
-        return DeliveryLog(
-            log_id=row["log_id"],
-            task_id=row["task_id"],
-            decision_id=row["decision_id"],
-            event_id=row["event_id"],
-            user_id=row["user_id"],
-            channel=row["channel"],
-            status=row["status"],
-            retry_count=int(row["retry_count"]),
-            provider_message_id=row["provider_message_id"],
-            error_message=row["error_message"],
-            delivered_at=row["delivered_at"],
-            metadata=json.loads(row["metadata_json"]),
+        return DeliveryLog.model_validate(
+            {
+                "log_id": row["log_id"],
+                "task_id": row["task_id"],
+                "decision_id": row["decision_id"],
+                "event_id": row["event_id"],
+                "user_id": row["user_id"],
+                "channel": row["channel"],
+                "status": row["status"],
+                "retry_count": int(row["retry_count"]),
+                "provider_message_id": row["provider_message_id"],
+                "error_message": row["error_message"],
+                "delivered_at": row["delivered_at"],
+                "metadata": json.loads(row["metadata_json"]),
+            }
         )

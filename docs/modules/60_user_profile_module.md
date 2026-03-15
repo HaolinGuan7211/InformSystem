@@ -8,6 +8,45 @@ docs/modules/60_user_profile_module.md
 
 ---
 
+## 13. 简单画像与复杂画像分层补充（2026-03-15）
+
+本模块在相关性筛选主链路中的定位补充为：
+
+- 用户画像层继续提供完整 `UserProfile`
+- 但需要更明确地区分简单画像与复杂画像
+- 规则层主要消费简单画像
+- AI 层主要消费由 `ProfileContextSelector` 裁剪出的复杂画像切片
+
+### 13.1 简单画像
+
+适合规则层粗筛的内容包括：
+
+- `identity_tags`
+- `degree_level`
+- `college`
+- `major`
+- `grade`
+- 当前课程标题
+- 当前待办标题
+
+### 13.2 复杂画像
+
+适合 AI 精筛的内容包括：
+
+- `credit_status.program_summary`
+- `credit_status.module_progress`
+- `credit_status.pending_items`
+- `credit_status.attention_signals`
+- 毕业进度相关状态
+
+### 13.3 `ProfileContextSelector` 的主链路意义
+
+`ProfileContextSelector` 不只是 token 优化器，还承担架构分层职责：
+
+- 防止规则层直接吞下复杂画像推理
+- 防止 AI 默认读取完整画像
+- 让复杂画像只在需要精筛时进入主链路
+
 ## 1. 业务背景
 
 同一条通知对不同学生的重要性可能完全不同：
@@ -39,6 +78,7 @@ docs/modules/60_user_profile_module.md
 3. **维护毕业阶段和当前任务状态**
 4. **维护提醒偏好**
 5. **向其他模块输出稳定的用户画像对象**
+6. **根据 facet 需求输出最小相关画像切片**
 
 用户画像层不做这些事情：
 
@@ -91,6 +131,15 @@ docs/modules/60_user_profile_module.md
 - 用户状态数据与通知分析逻辑解耦
 - 支持缺省字段和渐进补全
 - 必须可单独运行和测试
+- 可以根据 `required_profile_facets` 生成最小 `ProfileContext`
+- 不自行决定某条通知需要哪些 facet
+- 自动采样流程不得直接进入主通知工作流
+- 自动采样必须先经过学校字段兼容层，再落本地 `UserProfile`
+- 本地画像字段命名不得依赖某个学校系统的原始字段命名
+- 默认采用“离线优先、低频在线验证”的开发方式
+- 在线采样不得把学校系统当成实时查询源，只能作为低频同步源
+- 在线采样必须受登录冷却、会话复用、端点白名单和请求预算约束
+- 一次真实抓取后的原始响应应优先固化为本地 fixture，后续解析与测试默认离线完成
 
 ---
 
@@ -157,6 +206,28 @@ class UserProfile(BaseModel):
 
 ---
 
+#### `ProfileContext`
+
+```python
+from pydantic import BaseModel, Field
+from typing import Any
+
+
+class ProfileContext(BaseModel):
+    user_id: str
+    facets: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    generated_at: str
+```
+
+说明：
+
+- `ProfileContext` 是从完整 `UserProfile` 派生出的最小相关上下文
+- AI 层默认消费 `ProfileContext`，而不是直接消费整份 `UserProfile`
+
+---
+
 ### 4.2 模块主接口
 
 ```python
@@ -205,7 +276,23 @@ class UserProfileService:
 
 ---
 
-### 4.5 手动维护接口
+### 4.5 画像切片接口
+
+```python
+class ProfileContextSelector:
+    async def select(self, profile: UserProfile, required_facets: list[str], context: dict | None = None) -> ProfileContext:
+        ...
+```
+
+说明：
+
+- `required_facets` 必须来自共享协议中的 `profile_facet` 枚举
+- `ProfileContextSelector` 负责把完整快照裁剪为最小相关上下文
+- 该组件不负责判断 facet 是否合理，只负责执行选择与结构化输出
+
+---
+
+### 4.6 手动维护接口
 
 ```http
 PUT /api/v1/users/{user_id}/profile
@@ -221,7 +308,9 @@ Content-Type: application/json
 
 ## 5. 模块内部架构
 
-建议用户画像层拆成 6 个子模块：
+建议用户画像层拆成两部分：
+
+本地画像域：
 
 1. `ProfileRepository`
 2. `CourseSyncAdapter`
@@ -229,6 +318,28 @@ Content-Type: application/json
 4. `GraduationStatusManager`
 5. `PreferenceManager`
 6. `SnapshotBuilder`
+7. `ProfileContextSelector`
+
+自动采样扩展：
+
+8. `ProfileSamplingService`
+9. `ProfileCompatibilityLayer`
+10. `ProfileSyncOrchestrator`
+
+如果启用真实在线采样，还必须配套以下保护组件：
+
+- `LoginCooldownGuard`：限制同一学校账号在冷却窗口内的真实登录次数
+- `SessionReuseStore`：同一采样任务内复用同一会话，禁止重复认证
+- `AllowedEndpointPolicy`：仅允许访问已登记的学校端点白名单
+- `FixtureCaptureStore`：一次真实抓取后固化原始响应，后续默认离线调试
+
+其中：
+
+- `ProfileSamplingService` 负责认证、会话建立、学校侧原始数据采样
+- `ProfileCompatibilityLayer` 负责把学校字段映射为本地画像字段
+- `ProfileSyncOrchestrator` 负责执行“采样 -> 兼容映射 -> 合并 -> 落库 -> 快照”
+- `SnapshotBuilder` 继续只消费本地画像数据，不直接访问学校系统
+- `ProfileContextSelector` 负责从完整快照中按 facet 输出最小业务上下文
 
 ---
 
@@ -294,6 +405,7 @@ class CourseSyncAdapter:
 - 维护学分状态
 - 输出面向规则层的结构化字段
 - 支持标记缺口和异常状态
+- 产出 `attention_signals` 这类高价值派生信号
 
 #### 接口
 
@@ -302,6 +414,22 @@ class CreditStatusManager:
     async def get_credit_status(self, user_id: str) -> dict:
         ...
 ```
+
+#### 第一阶段结构约束
+
+`credit_status` 的内部结构必须对齐共享协议，至少包含：
+
+- `program_summary`
+- `module_progress`
+- `pending_items`
+- `attention_signals`
+- `source_snapshot`
+
+约束说明：
+
+- `module_progress` 中的子模块是后续规则和 AI 的默认消费粒度
+- “全量培养方案课程明细”不应直接塞进 `enrolled_courses`
+- 学校侧字段如 `PYFADM`、`KZH`、`FKZH` 只能停留在 `metadata`
 
 ---
 
@@ -371,6 +499,34 @@ class SnapshotBuilder:
 
 ---
 
+### 6.7 ProfileContextSelector
+
+#### 业务背景
+
+随着学业完成数据变细，完整 `UserProfile` 已经不适合默认直接进入 AI。
+
+#### 职责
+
+- 根据 `required_profile_facets` 从完整快照中提取最小相关上下文
+- 控制 AI 默认可见的课程、模块缺口和偏好范围
+- 为下游提供稳定的 `ProfileContext`
+
+#### 接口
+
+```python
+class ProfileContextSelector:
+    async def select(self, profile: UserProfile, required_facets: list[str], context: dict | None = None) -> ProfileContext:
+        ...
+```
+
+#### 开发约束
+
+- 默认不输出未被请求的 facet
+- 默认不把 82 条全量课程明细直接放入 AI 输入
+- 允许在 `metadata` 中记录切片来源、版本和降级说明
+
+---
+
 ## 7. 数据存储设计
 
 用户画像层至少依赖：
@@ -393,6 +549,11 @@ class SnapshotBuilder:
 - 学分状态：进入 `user_profiles.credit_status_json`，在快照中映射为 `credit_status`
 - 毕业阶段与当前待办：进入 `user_profiles.graduation_stage` 和 `current_tasks_json`
 - 偏好状态：进入 `user_preferences`，在快照中映射为 `notification_preference`
+
+补充约束：
+
+- `credit_status_json` 是“学业完成状态”的主落点，不是任意大杂烩 JSON
+- 用户自定义关注项如需持久化，优先进入偏好 / 订阅配置域，不默认混入 `credit_status`
 
 ---
 
@@ -436,8 +597,62 @@ class SnapshotBuilder:
   "graduation_stage": "graduation_review",
   "enrolled_courses": [],
   "credit_status": {
-    "required_total": 160,
-    "completed_total": 154
+    "program_summary": {
+      "program_name": "2022级软件工程主修培养方案",
+      "required_total_credits": 160.0,
+      "completed_total_credits": 154.0,
+      "outstanding_total_credits": 6.0,
+      "exempted_total_credits": 0.0,
+      "plan_version": "2022"
+    },
+    "module_progress": [
+      {
+        "module_id": "mod_practice",
+        "module_name": "实践模块",
+        "parent_module_id": null,
+        "parent_module_name": null,
+        "module_level": "parent",
+        "required_credits": 16.0,
+        "completed_credits": 12.0,
+        "outstanding_credits": 4.0,
+        "required_course_count": null,
+        "completed_course_count": null,
+        "outstanding_course_count": null,
+        "completion_status": "in_progress",
+        "attention_tags": ["credit_gap"],
+        "metadata": {}
+      }
+    ],
+    "pending_items": [
+      {
+        "item_id": "pending_practice_001",
+        "item_type": "module_credit_gap",
+        "title": "实践模块仍需补足 4 学分",
+        "module_id": "mod_practice",
+        "module_name": "实践模块",
+        "credits": 4.0,
+        "status": "pending",
+        "priority_hint": "high",
+        "metadata": {}
+      }
+    ],
+    "attention_signals": [
+      {
+        "signal_type": "credit_gap",
+        "signal_key": "practice_credit_gap",
+        "signal_value": "4.0",
+        "severity": "high",
+        "evidence": ["实践模块未完成"]
+      }
+    ],
+    "source_snapshot": {
+      "school_code": "szu",
+      "source_system": "ehall_academic_completion",
+      "synced_at": "2026-03-13T10:19:00+08:00",
+      "source_version": "xywccx_v1",
+      "freshness_status": "fresh",
+      "metadata": {}
+    }
   },
   "current_tasks": ["毕业资格审核"],
   "notification_preference": {
@@ -465,7 +680,9 @@ class SnapshotBuilder:
 3. 缺省字段兼容测试
 4. 课程同步测试
 5. 快照构建测试
-6. 毕业阶段状态测试
+6. `credit_status` 结构冻结测试
+7. `ProfileContextSelector` 切片测试
+8. 毕业阶段状态测试
 
 ---
 
@@ -476,7 +693,8 @@ class SnapshotBuilder:
 1. `user_id → UserProfile` 完整链路测试
 2. 手动维护接口测试
 3. 画像变更后下游读取测试
-4. 批量枚举用户测试
+4. `required_profile_facets -> ProfileContext` 生成测试
+5. 批量枚举用户测试
 
 ---
 
@@ -496,15 +714,36 @@ class SnapshotBuilder:
 - 输出统一 `UserProfile`
 - 支持基础身份、课程、学分、毕业状态和偏好
 - 支持快照构建
+- 提供 `ProfileContextSelector`
 - 支持手动维护能力
+- 如果实现自动采样，必须保留“学校采样层 -> 兼容层 -> 本地画像层”的分层边界
+- 自动采样结果必须支持缺省字段、渐进补全和与现有画像合并
+- 自动采样必须提供离线 fixture 驱动能力，不能把真实学校系统当成默认开发环境
 
-### 10.2 不要做
+### 10.2 在线采样安全约束
+
+- 一个采样任务最多只允许一次真实登录
+- 同一采样任务内所有页面和接口必须复用同一个 session
+- 未经人工确认，不得执行真实在线采样
+- 在线采样必须设置登录冷却时间；默认建议同一学校账号 2 小时内最多 1 次真实登录
+- 在线采样必须设置请求预算；超过预算后必须硬停止，不得自动重试
+- 在线采样只能访问已登记的端点白名单，不得在学校系统中临时扫目录、猜路径或探测未知入口
+- 出现验证码、滑块、异常跳转、频繁重定向、403、404、412 或账号异常提示时，必须立即停止，不得继续尝试
+- 真实抓取拿到一次响应后，应立即转入离线解析、映射和测试，不得为调试重复登录
+- 浏览器人工登录态接管优先级高于脚本直登；除非已明确验证安全窗口，否则不要默认脚本直登
+- 自动采样流程不得在主通知编排链路中隐式触发，必须由独立同步任务显式执行
+
+### 10.3 不要做
 
 - 不要在画像层写通知判断逻辑
 - 不要把下游规则写回画像模型
 - 不要让字段命名依赖某个上游系统原始命名
+- 不要把全量培养方案课程明细直接塞进 `enrolled_courses`
+- 不要为了调试反复单独执行认证脚本
+- 不要把多个学校系统入口放在同一轮真实探测里批量尝试
+- 不要在未固化 fixture 前持续对真实系统做解析调试
 
-### 10.3 推荐工程目录
+### 10.4 推荐工程目录
 
 ```text
 backend/app/services/user_profile/
@@ -521,6 +760,32 @@ backend/app/services/user_profile/
     test_snapshot_builder.py
     test_preference_manager.py
     test_profile_service.py
+
+backend/app/services/profile_sampling/
+  auth/
+    base.py
+    browser_session_provider.py
+    offline_auth_provider.py
+    szu_http_cas_provider.py
+  samplers/
+    base.py
+    szu/
+      board_identity_sampler.py
+      personal_info_sampler.py
+      hint_payload_sampler.py
+  models.py
+  service.py
+
+backend/app/services/profile_compat/
+  mappers/
+    base.py
+    szu_mapper.py
+  merge.py
+  models.py
+  service.py
+
+backend/app/workflows/
+  profile_sync_orchestrator.py
 ```
 
 ---

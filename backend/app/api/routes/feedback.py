@@ -43,7 +43,10 @@ async def create_feedback(payload: FeedbackCreateRequest, request: Request) -> d
 @router.post("/delivery-outcomes")
 async def create_delivery_outcome(payload: DeliveryLog, request: Request) -> dict[str, Any]:
     container = get_container(request)
-    await container.feedback_service.record_delivery_outcome(payload)
+    await container.feedback_service.record_delivery_outcome(
+        payload,
+        persist_delivery_fact=True,
+    )
     return {"success": True, "log_id": payload.log_id}
 
 

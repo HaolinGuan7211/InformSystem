@@ -9,8 +9,8 @@ from backend.app.services.ai_processing.repositories.ai_analysis_repository impo
 from backend.app.services.decision_engine.repositories.decision_repository import (
     SQLiteDecisionRepository,
 )
-from backend.app.services.feedback.repositories.delivery_log_repository import (
-    SQLiteDeliveryLogRepository,
+from backend.app.services.delivery.repositories.delivery_log_repository import (
+    DeliveryLogRepository,
 )
 from backend.app.services.feedback.repositories.feedback_repository import (
     SQLiteFeedbackRepository,
@@ -41,7 +41,7 @@ class SampleAssembler:
         rule_analysis_repository: RuleAnalysisRepository,
         ai_analysis_repository: SQLiteAIAnalysisRepository,
         decision_repository: SQLiteDecisionRepository,
-        delivery_log_repository: SQLiteDeliveryLogRepository,
+        delivery_log_repository: DeliveryLogRepository,
         feedback_repository: SQLiteFeedbackRepository,
         timezone_offset: str = "+08:00",
     ) -> None:
@@ -60,13 +60,16 @@ class SampleAssembler:
         feedback_record: UserFeedbackRecord | None = None,
         delivery_log: DeliveryLog | None = None,
     ) -> OptimizationSample | None:
-        if feedback_record is None:
+        should_backfill_feedback = feedback_record is None and delivery_log is None
+        should_backfill_delivery = delivery_log is None
+
+        if should_backfill_feedback:
             feedback_record = await self._feedback_repository.get_latest_by_event_and_user(
                 event_id,
                 user_id,
             )
 
-        if delivery_log is None:
+        if should_backfill_delivery:
             if feedback_record is not None and feedback_record.delivery_log_id is not None:
                 delivery_log = await self._delivery_log_repository.get_by_log_id(
                     feedback_record.delivery_log_id

@@ -22,6 +22,7 @@ class DeliveryService:
         digest_composer: DigestComposer,
         log_repository: DeliveryLogRepository,
         timezone_offset: str = "+08:00",
+        default_channel_configs: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self._planner = planner
         self._gateway_manager = gateway_manager
@@ -29,6 +30,7 @@ class DeliveryService:
         self._digest_composer = digest_composer
         self._log_repository = log_repository
         self._timezone_offset = timezone_offset
+        self._default_channel_configs = default_channel_configs or {}
 
     async def dispatch(
         self,
@@ -43,11 +45,20 @@ class DeliveryService:
             user_profile=user_profile,
             context=context,
         )
+        current_time = resolve_now((context or {}).get("current_time"), self._timezone_offset)
+
         if not tasks:
+            if self._requires_delivery(decision_result):
+                failure_log = self._build_missing_channel_log(
+                    decision_result=decision_result,
+                    current_time=current_time,
+                    context=context,
+                )
+                await self._log_repository.save(failure_log, created_at=current_time.isoformat())
+                return [failure_log]
             return []
 
         logs: list[DeliveryLog] = []
-        current_time = resolve_now((context or {}).get("current_time"), self._timezone_offset)
 
         for task in tasks:
             terminal = await self._log_repository.get_latest_terminal_log(task.task_id)
@@ -115,7 +126,6 @@ class DeliveryService:
         current_time: datetime,
         context: dict[str, Any] | None = None,
     ) -> list[DeliveryLog]:
-        gateway = self._gateway_manager.get_gateway(task.channel)
         channel_config = self._resolve_channel_config(task.channel, context)
 
         async def _persist(logs: list[DeliveryLog]) -> None:
@@ -140,13 +150,13 @@ class DeliveryService:
                     provider_message_id=response.provider_message_id if response else None,
                     error_message=str(error) if error else None,
                     delivered_at=current_time.isoformat() if status == "sent" else None,
-                    metadata={},
+                    metadata=self._build_attempt_metadata(error),
                 )
             ]
 
         return await self._retry_manager.execute(
             task=task,
-            sender=lambda payload: gateway.send(payload, channel_config),
+            sender=lambda payload: self._send_task(payload, channel_config),
             build_logs=_build_logs,
             persist_logs=_persist,
         )
@@ -189,11 +199,27 @@ class DeliveryService:
         channel: str,
         context: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        resolved: dict[str, Any] = {}
+        default_config = self._default_channel_configs.get("*") or {}
+        if isinstance(default_config, dict):
+            resolved.update(default_config)
+
+        channel_default = self._default_channel_configs.get(channel) or {}
+        if isinstance(channel_default, dict):
+            resolved.update(channel_default)
+
         if not context:
-            return {}
+            return resolved
+
         channel_configs = context.get("channel_configs", {})
-        config = channel_configs.get(channel) or channel_configs.get("*") or {}
-        return config if isinstance(config, dict) else {}
+        override = channel_configs.get("*") or {}
+        if isinstance(override, dict):
+            resolved.update(override)
+
+        channel_override = channel_configs.get(channel) or {}
+        if isinstance(channel_override, dict):
+            resolved.update(channel_override)
+        return resolved
 
     def _resolve_log_id(
         self,
@@ -209,3 +235,40 @@ class DeliveryService:
                 if isinstance(override, str):
                     return override
         return build_log_id()
+
+    async def _send_task(
+        self,
+        task: DeliveryTask,
+        channel_config: dict[str, Any],
+    ) -> GatewaySendResult:
+        gateway = self._gateway_manager.get_gateway(task.channel)
+        return await gateway.send(task, channel_config)
+
+    def _requires_delivery(self, decision_result: DecisionResult) -> bool:
+        return decision_result.decision_action in {"push_now", "push_high", "digest"}
+
+    def _build_missing_channel_log(
+        self,
+        decision_result: DecisionResult,
+        current_time: datetime,
+        context: dict[str, Any] | None,
+    ) -> DeliveryLog:
+        return DeliveryLog(
+            log_id=self._resolve_log_id("unresolved_channel", "failed", context),
+            task_id=f"task_missing_channel_{decision_result.decision_id}",
+            decision_id=decision_result.decision_id,
+            event_id=decision_result.event_id,
+            user_id=decision_result.user_id,
+            channel="unresolved_channel",
+            status="failed",
+            retry_count=0,
+            provider_message_id=None,
+            error_message="Missing delivery channels in DecisionResult",
+            delivered_at=None,
+            metadata={"failure_reason": "missing_delivery_channels", "created_at": current_time.isoformat()},
+        )
+
+    def _build_attempt_metadata(self, error: Exception | None) -> dict[str, str]:
+        if error is None:
+            return {}
+        return {"failure_reason": type(error).__name__}

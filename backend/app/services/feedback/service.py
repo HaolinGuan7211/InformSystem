@@ -49,8 +49,16 @@ class FeedbackService:
 
         return record
 
-    async def record_delivery_outcome(self, delivery_log: DeliveryLog) -> None:
-        await self._delivery_outcome_collector.collect(delivery_log)
+    async def record_delivery_outcome(
+        self,
+        delivery_log: DeliveryLog,
+        *,
+        persist_delivery_fact: bool = False,
+    ) -> None:
+        await self._delivery_outcome_collector.collect(
+            delivery_log,
+            persist_delivery_fact=persist_delivery_fact,
+        )
 
     async def export_optimization_samples(
         self,

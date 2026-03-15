@@ -75,7 +75,7 @@ class ResultValidator:
             normalized_category=self._optional_text(ai_result.normalized_category),
             action_items=action_items,
             extracted_fields=extracted_fields,
-            relevance_hint=self._optional_text(ai_result.relevance_hint),
+            relevance_hint=self._normalize_relevance_hint(ai_result.relevance_hint),
             urgency_hint=self._optional_text(ai_result.urgency_hint),
             risk_hint=self._optional_text(ai_result.risk_hint),
             confidence=confidence,
@@ -95,3 +95,19 @@ class ResultValidator:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    def _normalize_relevance_hint(self, value: str | None) -> str | None:
+        cleaned = self._optional_text(value)
+        if cleaned is None:
+            return None
+
+        normalized = cleaned.lower()
+        if normalized in {"relevant", "irrelevant", "uncertain"}:
+            return normalized
+        if any(token in cleaned for token in ("无关", "不相关", "不匹配", "不是目标", "无需关注")):
+            return "irrelevant"
+        if any(token in cleaned for token in ("不确定", "待确认", "可能相关", "候选")):
+            return "uncertain"
+        if any(token in cleaned for token in ("相关", "匹配", "面向", "命中", "适合", "高度相关")):
+            return "relevant"
+        return "uncertain"

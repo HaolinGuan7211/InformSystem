@@ -9,14 +9,11 @@ class DeliveryChannelRouter:
         decision_result: DecisionResult,
         user_profile: UserProfile,
     ) -> list[str]:
+        del user_profile
         if decision_result.decision_action not in {"push_now", "push_high", "digest"}:
             return []
 
-        candidates = (
-            decision_result.delivery_channels
-            or user_profile.notification_preference.channels
-            or ["app_push"]
-        )
+        candidates = decision_result.delivery_channels
         seen: set[str] = set()
         ordered: list[str] = []
         for channel in candidates:

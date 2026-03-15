@@ -14,6 +14,53 @@
 
 ---
 
+## 9. 相关性筛选语义补充（2026-03-15）
+
+本节补充现有共享对象在“规则粗筛 + AI 精筛”架构下的解释语义，不新增字段，只冻结既有字段的使用方式。
+
+### 9.1 `RuleAnalysisResult.relevance_status`
+
+`RuleAnalysisResult.relevance_status` 表示第一阶段粗筛结论。
+
+- `irrelevant`
+  - 存在明确硬失配
+  - 规则层即可排除
+- `relevant`
+  - 存在明确硬命中
+  - 规则层已能高置信度认定与用户相关
+- `unknown`
+  - 表示候选通知
+  - 值得进入 AI 精筛
+  - 不等价于最终“与你相关”
+
+### 9.2 `RuleAnalysisResult.should_invoke_ai`
+
+`should_invoke_ai` 的默认语义是：
+
+**该通知是否需要进入第二阶段 AI 精筛。**
+
+它不表示“AI 只是做摘要”，也不表示“AI 只在高风险场景补一句话”。
+
+### 9.3 `AIAnalysisResult.relevance_hint`
+
+`AIAnalysisResult.relevance_hint` 应按标准值解释：
+
+- `relevant`
+- `irrelevant`
+- `uncertain`
+
+允许保留附加自然语言解释，但下游模块消费时必须先按上述标准值理解。
+
+### 9.4 `DecisionResult.reason_summary`
+
+`reason_summary` 是最终动作摘要，不是规则层中间态翻译。
+
+因此：
+
+- 归档结果不应直接写成“与你可能相关”
+- 忽略结果不应使用正向相关措辞
+- 中间候选态必须在进入最终摘要前被转换成与 `decision_action` 一致的文案
+
 ## 2. 适用范围与优先级
 
 本文件适用于以下跨模块共享对象：
@@ -23,6 +70,7 @@
 - `CourseInfo`
 - `NotificationPreference`
 - `UserProfile`
+- `ProfileContext`
 - `MatchedRule`
 - `RuleAnalysisResult`
 - `AIExtractedField`
@@ -172,6 +220,36 @@
 - `too_frequent`
 - `missed_important`
 
+### 4.9 `profile_facet`
+
+- `identity_core`
+- `current_courses`
+- `academic_completion`
+- `graduation_progress`
+- `activity_based_credit_gap`
+- `online_platform_credit_gap`
+- `custom_watch_items`
+- `notification_preference`
+
+### 4.10 `module_completion_status`
+
+- `completed`
+- `in_progress`
+- `not_started`
+
+### 4.11 `profile_freshness_status`
+
+- `fresh`
+- `stale`
+- `unknown`
+
+### 4.12 `pending_item_status`
+
+- `pending`
+- `completed`
+- `waived`
+- `unknown`
+
 ---
 
 ## 5. 共享对象定义
@@ -315,6 +393,116 @@ class UserProfile(BaseModel):
 
 ---
 
+### 5.5.1 `credit_status` 内部结构
+
+`credit_status` 虽然在顶层对象中保留为 `dict[str, Any]`，但其第一阶段内部结构在共享协议层冻结为以下语义：
+
+```python
+credit_status = {
+    "program_summary": {
+        "program_name": str | None,
+        "required_total_credits": float | None,
+        "completed_total_credits": float | None,
+        "outstanding_total_credits": float | None,
+        "exempted_total_credits": float | None,
+        "plan_version": str | None,
+    },
+    "module_progress": [
+        {
+            "module_id": str,
+            "module_name": str,
+            "parent_module_id": str | None,
+            "parent_module_name": str | None,
+            "module_level": str,
+            "required_credits": float | None,
+            "completed_credits": float | None,
+            "outstanding_credits": float | None,
+            "required_course_count": int | None,
+            "completed_course_count": int | None,
+            "outstanding_course_count": int | None,
+            "completion_status": str,
+            "attention_tags": list[str],
+            "metadata": dict[str, Any],
+        }
+    ],
+    "pending_items": [
+        {
+            "item_id": str,
+            "item_type": str,
+            "title": str,
+            "module_id": str | None,
+            "module_name": str | None,
+            "credits": float | None,
+            "status": str,
+            "priority_hint": str | None,
+            "metadata": dict[str, Any],
+        }
+    ],
+    "attention_signals": [
+        {
+            "signal_type": str,
+            "signal_key": str,
+            "signal_value": str | None,
+            "severity": str,
+            "evidence": list[str],
+        }
+    ],
+    "source_snapshot": {
+        "school_code": str | None,
+        "source_system": str | None,
+        "synced_at": str | None,
+        "source_version": str | None,
+        "freshness_status": str,
+        "metadata": dict[str, Any],
+    },
+}
+```
+
+字段语义补充：
+
+- `program_summary`：培养方案总览，只承载总学分层面的稳定状态
+- `module_progress`：模块级完成情况，支持父模块与子模块并存，但后续规则和 AI 默认优先消费子模块
+- `pending_items`：待完成项，只承载仍对业务判断有价值的缺口事项，不等价于“全量未修课程”
+- `attention_signals`：从学分与毕业状态中派生出的高价值结构化信号，供规则层和决策层优先消费
+- `source_snapshot`：本次学业完成同步的来源快照和新鲜度状态
+
+约束说明：
+
+- `enrolled_courses` 只承载“当前在修 / 当前选课”的课程，不承载全量培养方案课程
+- 学校侧原始字段如 `PYFADM`、`KZH`、`FKZH` 只能停留在 `metadata` 中，不进入共享业务字段
+- “活动学分”“网课平台学分”等派生信号应优先进入 `attention_signals`，不应依赖 AI 临时猜测
+
+---
+
+### 5.5.2 `ProfileContext`
+
+```python
+from pydantic import BaseModel, Field
+from typing import Any
+
+
+class ProfileContext(BaseModel):
+    user_id: str
+    facets: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    generated_at: str
+```
+
+字段语义：
+
+- `facets`：本次切片实际包含的画像 facet 集合，必须使用 `profile_facet` 枚举值
+- `payload`：最小相关画像上下文，只承载本次规则 / AI 需要消费的业务语义
+- `metadata`：切片来源、快照时间、降级说明等辅助信息
+
+约束说明：
+
+- `ProfileContext` 是 `UserProfile` 的派生切片，不是新的主画像对象
+- AI 层默认消费 `ProfileContext`，而不是完整 `UserProfile`
+- 未被 `required_profile_facets` 选中的画像内容不应默认进入 `payload`
+
+---
+
 ### 5.6 `MatchedRule`
 
 ```python
@@ -347,6 +535,7 @@ class RuleAnalysisResult(BaseModel):
     candidate_categories: list[str] = Field(default_factory=list)
     matched_rules: list[MatchedRule] = Field(default_factory=list)
     extracted_signals: dict[str, Any] = Field(default_factory=dict)
+    required_profile_facets: list[str] = Field(default_factory=list)
     relevance_status: str
     relevance_score: float
     action_required: bool | None = None
@@ -367,12 +556,14 @@ class RuleAnalysisResult(BaseModel):
 - `candidate_categories`：候选通知类别
 - `matched_rules`：命中的规则和证据
 - `extracted_signals`：结构化信号结果
+- `required_profile_facets`：如需进入 AI 或后续复杂决策时，建议选择的最小画像切片集合
 - `should_invoke_ai`：规则层建议是否送 AI
 - `should_continue`：是否值得继续进入决策流程
 
 数值约束：
 
 - `relevance_score` 约定范围为 `0.0 ~ 1.0`
+- `required_profile_facets` 中的值必须来自 `profile_facet` 枚举；规则层只声明需求，不负责切片
 
 ---
 
@@ -696,11 +887,66 @@ class PushPolicyConfig(BaseModel):
 
 ---
 
+### 5.20 `AIRuntimeConfig`
+
+```python
+from pydantic import BaseModel, Field
+from typing import Any
+
+
+class AIRuntimeConfig(BaseModel):
+    config_id: str = "default"
+    enabled: bool = True
+    provider: str = "mock"
+    model_name: str
+    prompt_version: str
+    template_path: str
+    endpoint: str | None = None
+    api_key: str | None = None
+    timeout_seconds: float = 15.0
+    max_retries: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    version: str
+```
+
+字段语义：
+
+- `model_name`：本轮 AI 调用默认模型名
+- `prompt_version`：与 `AIAnalysisResult.prompt_version` 对齐的提示词版本
+- `template_path`：Prompt 模板路径，属于配置选择结果，不是运行时输出
+- `version`：AI 运行配置快照版本，用于发布、回滚和审计
+
+---
+
+### 5.21 `DeliveryChannelConfig`
+
+```python
+from pydantic import BaseModel, Field
+from typing import Any
+
+
+class DeliveryChannelConfig(BaseModel):
+    channel: str
+    enabled: bool = True
+    provider: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    version: str
+```
+
+字段语义：
+
+- `channel`：发文层识别的渠道名，例如 `app_push`、`email`
+- `provider`：当前渠道绑定的网关实现或供应商标识
+- `config`：渠道默认配置，例如 mock 参数、超时或供应商侧元数据
+
+---
+
 ## 6. 字段所有权约定
 
 - 接入层拥有 `SourceEvent` 的生成权
-- 配置层拥有 `SourceConfig`、`RuleConfig`、`NotificationCategoryConfig`、`PushPolicyConfig` 的发布权
+- 配置层拥有 `SourceConfig`、`RuleConfig`、`NotificationCategoryConfig`、`PushPolicyConfig`、`AIRuntimeConfig`、`DeliveryChannelConfig` 的发布权
 - 用户画像层拥有 `UserProfile` 的生成和更新权
+- 用户画像层拥有 `ProfileContext` 的生成权
 - 规则层拥有 `RuleAnalysisResult` 的生成权
 - AI 层拥有 `AIAnalysisResult` 的生成权
 - 决策层拥有 `DecisionResult` 的生成权

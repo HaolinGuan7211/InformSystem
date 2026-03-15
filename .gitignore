@@ -10,6 +10,8 @@ htmlcov/
 .venv/
 venv/
 env/
+.env.local
+.env.*.local
 
 *.egg-info/
 build/
@@ -20,6 +22,9 @@ backend/data/
 *.db
 *.db-journal
 *.sqlite3
+tmp/
+docs/module_reports/
+docs/thread_prompts/
 
 .idea/
 .vscode/

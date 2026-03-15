@@ -44,3 +44,22 @@ async def test_planner_uses_scheduled_time_from_decision_metadata(flow_inputs) -
     assert len(tasks) == 1
     assert tasks[0].scheduled_at == "2026-03-14T07:00:00+08:00"
     assert tasks[0].dedupe_key == "dec_sched:app_push:scheduled"
+
+
+async def test_planner_does_not_reintroduce_channels_from_user_profile(flow_inputs) -> None:
+    planner = DeliveryPlanner(DeliveryChannelRouter(), MessageRenderer())
+    decision = flow_inputs["decision_result"].model_copy(
+        update={
+            "decision_id": "dec_no_channel",
+            "event_id": "evt_no_channel",
+            "delivery_channels": [],
+        }
+    )
+
+    tasks = await planner.build_tasks(
+        decision,
+        flow_inputs["event"].model_copy(update={"event_id": "evt_no_channel"}),
+        flow_inputs["user_profile"],
+    )
+
+    assert tasks == []

@@ -32,6 +32,7 @@
         "hit_type": "profile_match",
         "weight": 0.45,
         "candidate_categories": ["graduation"],
+        "required_profile_facets": ["identity_core", "graduation_progress"],
         "signals": {
           "audience": ["毕业生"]
         },
@@ -100,6 +101,77 @@
         "candidate_categories": ["graduation"],
         "urgency_level": "high",
         "risk_level": "high",
+        "emit_match": false
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_student_assistant_audience",
+      "rule_name": "学生助理招聘受众识别",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 60,
+      "conditions": {
+        "any_keywords": ["学生助理", "勤工助学"],
+        "profile_any": {
+          "degree_level": ["undergraduate", "graduate", "master", "doctoral", "phd"]
+        }
+      },
+      "outputs": {
+        "dimension": "audience",
+        "hit_type": "profile_match",
+        "weight": 0.45,
+        "candidate_categories": ["student_opportunity"],
+        "signals": {
+          "audience": ["student"]
+        },
+        "explanation": "命中学生岗位招聘受众",
+        "emit_match": false
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_student_assistant_action",
+      "rule_name": "学生助理招聘动作识别",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 55,
+      "conditions": {
+        "any_keywords": ["招聘", "招募", "报名"],
+        "action_keywords": ["报名", "应聘"]
+      },
+      "outputs": {
+        "dimension": "action",
+        "hit_type": "keyword",
+        "weight": 0.25,
+        "candidate_categories": ["student_opportunity"],
+        "action_required": true,
+        "urgency_level": "high",
+        "risk_level": "high",
+        "signals": {
+          "action_keywords": ["报名", "应聘"]
+        },
+        "explanation": "命中学生岗位报名动作",
+        "emit_match": true
+      },
+      "version": "v1"
+    },
+    {
+      "rule_id": "rule_open_opportunity_guard",
+      "rule_name": "开放机会候选保护带",
+      "scene": "rule_engine",
+      "enabled": true,
+      "priority": 45,
+      "conditions": {
+        "any_keywords": ["创新创业短课", "通识课", "公开课", "开放课", "研习营", "夏令营", "讲座", "工作坊"]
+      },
+      "outputs": {
+        "dimension": "general",
+        "hit_type": "keyword",
+        "weight": 0.0,
+        "candidate_categories": ["open_opportunity"],
+        "required_profile_facets": ["identity_core"],
+        "explanation": "命中开放机会候选保护带",
         "emit_match": false
       },
       "version": "v1"

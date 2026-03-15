@@ -12,6 +12,16 @@ DecisionAction = Literal["push_now", "push_high", "digest", "archive", "ignore"]
 DeliveryTiming = Literal["immediate", "scheduled", "digest_window"]
 DeliveryStatus = Literal["pending", "sent", "failed", "skipped"]
 FeedbackType = Literal["useful", "not_relevant", "too_late", "too_frequent", "missed_important"]
+ProfileFacet = Literal[
+    "identity_core",
+    "current_courses",
+    "academic_completion",
+    "graduation_progress",
+    "activity_based_credit_gap",
+    "online_platform_credit_gap",
+    "custom_watch_items",
+    "notification_preference",
+]
 
 
 class AttachmentInfo(BaseModel):
@@ -69,6 +79,14 @@ class UserProfile(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProfileContext(BaseModel):
+    user_id: str
+    facets: list[ProfileFacet] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    generated_at: str
+
+
 class MatchedRule(BaseModel):
     rule_id: str
     rule_name: str
@@ -86,6 +104,7 @@ class RuleAnalysisResult(BaseModel):
     candidate_categories: list[str] = Field(default_factory=list)
     matched_rules: list[MatchedRule] = Field(default_factory=list)
     extracted_signals: dict[str, Any] = Field(default_factory=dict)
+    required_profile_facets: list[ProfileFacet] = Field(default_factory=list)
     relevance_status: RelevanceStatus
     relevance_score: float
     action_required: bool | None = None

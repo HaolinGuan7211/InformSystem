@@ -11,6 +11,8 @@ ConfigType = Literal[
     "rule_configs",
     "notification_category_configs",
     "push_policy_configs",
+    "ai_runtime_configs",
+    "delivery_channel_configs",
 ]
 ConfigAction = Literal["publish", "rollback", "bootstrap"]
 
@@ -71,6 +73,33 @@ class PushPolicyConfig(BaseModel):
     action: DecisionAction
     conditions: dict[str, Any] = Field(default_factory=dict)
     channels: list[str] = Field(default_factory=list)
+    version: str
+
+
+class AIRuntimeConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    config_id: str = "default"
+    enabled: bool = True
+    provider: str = "mock"
+    model_name: str
+    prompt_version: str
+    template_path: str
+    endpoint: str | None = None
+    api_key: str | None = None
+    timeout_seconds: float = 15.0
+    max_retries: int = Field(default=0, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    version: str
+
+
+class DeliveryChannelConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    channel: str
+    enabled: bool = True
+    provider: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
     version: str
 
 

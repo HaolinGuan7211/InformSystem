@@ -9,7 +9,8 @@ def test_feedback_api_records_feedback_and_exports_samples(
     load_golden,
     seed_pipeline_records,
 ) -> None:
-    asyncio.run(seed_pipeline_records(client.app.state.container))
+    container = client.app.state.container
+    asyncio.run(seed_pipeline_records(container))
 
     delivery_response = client.post(
         "/api/v1/feedback/delivery-outcomes",
@@ -26,6 +27,10 @@ def test_feedback_api_records_feedback_and_exports_samples(
     )
     assert feedback_response.status_code == 200
     assert feedback_response.json() == {"success": True, "feedback_id": "fb_002"}
+
+    stored_log = asyncio.run(container.delivery_log_repository.get_by_log_id("dlv_001"))
+    assert stored_log is not None
+    assert stored_log.status == "sent"
 
     export_response = client.get(
         "/api/v1/feedback/optimization-samples",

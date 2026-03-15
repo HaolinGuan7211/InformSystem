@@ -1,8 +1,20 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+
+ProfileFacet = Literal[
+    "identity_core",
+    "current_courses",
+    "academic_completion",
+    "graduation_progress",
+    "activity_based_credit_gap",
+    "online_platform_credit_gap",
+    "custom_watch_items",
+    "notification_preference",
+]
 
 
 class RuleConfig(BaseModel):
@@ -40,6 +52,7 @@ class RuleAnalysisResult(BaseModel):
     candidate_categories: list[str] = Field(default_factory=list)
     matched_rules: list[MatchedRule] = Field(default_factory=list)
     extracted_signals: dict[str, Any] = Field(default_factory=dict)
+    required_profile_facets: list[ProfileFacet] = Field(default_factory=list)
     relevance_status: str
     relevance_score: float
     action_required: bool | None = None

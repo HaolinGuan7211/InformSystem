@@ -1,40 +1,28 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-class CourseInfo(BaseModel):
-    course_id: str | None = None
-    course_name: str | None = None
-    teacher_name: str | None = None
-    schedule_text: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+ProfileFacet = Literal[
+    "identity_core",
+    "current_courses",
+    "academic_completion",
+    "graduation_progress",
+    "activity_based_credit_gap",
+    "online_platform_credit_gap",
+    "custom_watch_items",
+    "notification_preference",
+]
 
 
-class NotificationPreference(BaseModel):
-    channels: list[str] = Field(default_factory=list)
-    quiet_hours: list[str] = Field(default_factory=list)
-    digest_enabled: bool = False
-    muted_categories: list[str] = Field(default_factory=list)
-
-
-class UserProfile(BaseModel):
+class ProfileContext(BaseModel):
     user_id: str
-    student_id: str
-    name: str | None = None
-    college: str | None = None
-    major: str | None = None
-    grade: str | None = None
-    degree_level: str | None = None
-    identity_tags: list[str] = Field(default_factory=list)
-    graduation_stage: str | None = None
-    enrolled_courses: list[CourseInfo] = Field(default_factory=list)
-    credit_status: dict[str, Any] = Field(default_factory=dict)
-    current_tasks: list[str] = Field(default_factory=list)
-    notification_preference: NotificationPreference = Field(default_factory=NotificationPreference)
+    facets: list[ProfileFacet] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    generated_at: str
 
 
 class MatchedRule(BaseModel):
@@ -54,6 +42,7 @@ class RuleAnalysisResult(BaseModel):
     candidate_categories: list[str] = Field(default_factory=list)
     matched_rules: list[MatchedRule] = Field(default_factory=list)
     extracted_signals: dict[str, Any] = Field(default_factory=dict)
+    required_profile_facets: list[ProfileFacet] = Field(default_factory=list)
     relevance_status: str
     relevance_score: float
     action_required: bool | None = None
@@ -71,6 +60,15 @@ class AIExtractedField(BaseModel):
     field_name: str
     field_value: Any
     confidence: float = 0.0
+
+
+class AIStage1Result(BaseModel):
+    user_id: str
+    relevance_hint_stage1: Literal["irrelevant", "candidate", "relevant"]
+    required_profile_facets: list[ProfileFacet] = Field(default_factory=list)
+    reason_summary_stage1: str | None = None
+    confidence: float = 0.0
+    generated_at: str
 
 
 class AIAnalysisResult(BaseModel):
@@ -94,13 +92,14 @@ class AIAnalysisResult(BaseModel):
 
 
 class AIModelConfig(BaseModel):
+    enabled: bool = True
     provider: str = "mock"
     model_name: str
     prompt_version: str
     endpoint: str | None = None
     api_key: str | None = None
     timeout_seconds: float = 15.0
-    max_retries: int = 0
+    max_retries: int = Field(default=0, ge=0)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

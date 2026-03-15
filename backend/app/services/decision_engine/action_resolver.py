@@ -14,12 +14,24 @@ class ActionResolver:
         rule_result: RuleAnalysisResult,
         priority: dict[str, Any],
         policies: list[PushPolicyConfig],
+        decision_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        forced_action = self._resolve_forced_action(user_profile, decision_context)
+        if forced_action is not None:
+            return self._build_result(forced_action, self._find_action_policy(forced_action, policies), policies)
+
         if not priority["should_continue"]:
             return self._build_result("ignore", None, policies)
 
         if priority["relevance_status"] == "irrelevant":
             return self._build_result("ignore", self._find_action_policy("ignore", policies), policies)
+
+        if (
+            (decision_context or {}).get("reason_code") == "ai_confirmed_relevant"
+            and priority["priority_level"] == "low"
+        ):
+            action = "digest" if user_profile.notification_preference.digest_enabled else "archive"
+            return self._build_result(action, self._find_action_policy(action, policies), policies)
 
         if self._is_muted(rule_result, user_profile) and priority["priority_level"] in {"low", "medium"}:
             return self._build_result("archive", self._find_action_policy("archive", policies), policies)
@@ -123,6 +135,18 @@ class ActionResolver:
         for policy in policies:
             if policy.action == action:
                 return policy
+        return None
+
+    def _resolve_forced_action(
+        self,
+        user_profile: UserProfile,
+        decision_context: dict[str, Any] | None,
+    ) -> str | None:
+        force_action = (decision_context or {}).get("force_action")
+        if force_action == "digest_or_archive":
+            return "digest" if user_profile.notification_preference.digest_enabled else "archive"
+        if isinstance(force_action, str) and force_action:
+            return force_action
         return None
 
     def _normalize_list(self, value: Any) -> list[Any]:

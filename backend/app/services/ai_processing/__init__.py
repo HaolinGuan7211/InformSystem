@@ -11,12 +11,10 @@ from backend.app.services.ai_processing.models import (
     AIAnalysisResult,
     AIExtractedField,
     AIModelConfig,
-    CourseInfo,
     GatewayResponse,
     MatchedRule,
-    NotificationPreference,
+    ProfileContext,
     RuleAnalysisResult,
-    UserProfile,
 )
 from backend.app.services.ai_processing.prompt_builder import PromptBuilder
 from backend.app.services.ai_processing.repositories.ai_analysis_repository import (
@@ -33,7 +31,6 @@ __all__ = [
     "AIExtractedField",
     "AIModelConfig",
     "AIProcessingService",
-    "CourseInfo",
     "FieldExtractor",
     "GatewayResponse",
     "HTTPModelGateway",
@@ -42,12 +39,11 @@ __all__ = [
     "MockModelGateway",
     "ModelGateway",
     "ModelGatewayError",
-    "NotificationPreference",
+    "ProfileContext",
     "PromptBuilder",
     "ResultValidationError",
     "ResultValidator",
     "RuleAnalysisResult",
     "SQLiteAIAnalysisRepository",
     "SummaryGenerator",
-    "UserProfile",
 ]

@@ -48,6 +48,29 @@
     "polling_schedule": null,
     "authority_level": "medium",
     "priority": 10
+  },
+  {
+    "source_id": "szu_campus_board",
+    "source_name": "SZU Campus Board",
+    "source_type": "website",
+    "connector_type": "szu_board_authenticated",
+    "enabled": false,
+    "auth_config": {
+      "login_url": "https://authserver.szu.edu.cn/authserver/login?service=http%3A%2F%2Fwww1.szu.edu.cn%2Fmanage%2Fcaslogin.asp%3Frurl%3D%252Fboard%252F",
+      "board_url": "https://www1.szu.edu.cn/board/",
+      "username_env": "SZU_BOARD_USERNAME",
+      "password_env": "SZU_BOARD_PASSWORD"
+    },
+    "parse_config": {
+      "channel_type": "website_notice",
+      "timezone": "+08:00",
+      "list_url": "https://www1.szu.edu.cn/board/",
+      "max_items": 1,
+      "request_timeout_seconds": 20
+    },
+    "polling_schedule": null,
+    "authority_level": "high",
+    "priority": 95,
+    "max_retries": 0
   }
 ]
-

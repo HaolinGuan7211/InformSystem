@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.app.core.database import get_connection
 from backend.app.services.config.models import (
+    AIRuntimeConfig,
     ConfigChangeLog,
+    DeliveryChannelConfig,
     NotificationCategoryConfig,
     PushPolicyConfig,
     RuleBundle,
@@ -47,8 +49,10 @@ class ConfigFilePaths:
     source_config_path: Path
     rule_config_path: Path
     notification_category_path: Path
-    push_policy_path: Path
-    audit_log_path: Path
+    ai_runtime_config_path: Path = field(default_factory=lambda: Path("ai_runtime_config.json"))
+    delivery_channel_config_path: Path = field(default_factory=lambda: Path("delivery_channel_configs.json"))
+    push_policy_path: Path = field(default_factory=lambda: Path("push_policies.json"))
+    audit_log_path: Path = field(default_factory=lambda: Path("change_logs.json"))
 
 
 class FileConfigStore:
@@ -117,6 +121,68 @@ class FileConfigStore:
         ]
         _write_json(self._paths.notification_category_path, payload)
 
+    def get_ai_runtime_config(self) -> AIRuntimeConfig:
+        payload = _read_json(
+            self._paths.ai_runtime_config_path,
+            {
+                "config_id": "default",
+                "enabled": True,
+                "provider": "mock",
+                "model_name": "gpt-5-mini",
+                "prompt_version": "prompt_v1",
+                "template_path": "backend/app/services/ai_processing/prompts/notice_analysis_v1.txt",
+                "version": "ai_runtime_v1",
+            },
+        )
+        config = AIRuntimeConfig.model_validate(payload)
+        template_path = Path(config.template_path)
+        if not template_path.is_absolute():
+            config = config.model_copy(
+                update={
+                    "template_path": str(
+                        (self._paths.ai_runtime_config_path.parent / template_path).resolve()
+                    )
+                }
+            )
+        return config
+
+    def replace_ai_runtime_config(self, config: AIRuntimeConfig) -> None:
+        payload = config.model_dump(mode="json", exclude_none=True)
+        template_path = Path(payload["template_path"])
+        if template_path.is_absolute():
+            try:
+                payload["template_path"] = str(
+                    template_path.relative_to(self._paths.ai_runtime_config_path.parent)
+                )
+            except ValueError:
+                payload["template_path"] = str(template_path)
+        _write_json(self._paths.ai_runtime_config_path, payload)
+
+    def list_delivery_channel_configs(self) -> list[DeliveryChannelConfig]:
+        payload = _read_json(self._paths.delivery_channel_config_path, [])
+        configs = [DeliveryChannelConfig.model_validate(item) for item in payload]
+        return sorted(configs, key=lambda item: item.channel)
+
+    def get_delivery_channel_config(self, channel: str) -> DeliveryChannelConfig | None:
+        for config in self.list_delivery_channel_configs():
+            if config.channel == channel:
+                return config
+        return None
+
+    def replace_delivery_channel_configs(
+        self,
+        configs: list[DeliveryChannelConfig],
+        version: str,
+    ) -> None:
+        payload = [
+            config.model_copy(update={"version": config.version or version}).model_dump(
+                mode="json",
+                exclude_none=True,
+            )
+            for config in configs
+        ]
+        _write_json(self._paths.delivery_channel_config_path, payload)
+
     def list_push_policies(self) -> list[PushPolicyConfig]:
         payload = _read_json(self._paths.push_policy_path, [])
         policies = [PushPolicyConfig.model_validate(item) for item in payload]
@@ -162,8 +228,23 @@ class FileConfigStore:
 
 
 class SQLiteConfigStore:
-    def __init__(self, database_path: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        runtime_store: FileConfigStore | None = None,
+    ) -> None:
         self._database_path = database_path
+        self._runtime_store = runtime_store or FileConfigStore(
+            ConfigFilePaths(
+                source_config_path=database_path.parent / "source_configs.json",
+                rule_config_path=database_path.parent / "rule_configs.json",
+                notification_category_path=database_path.parent / "notification_categories.json",
+                ai_runtime_config_path=database_path.parent / "ai_runtime_config.json",
+                delivery_channel_config_path=database_path.parent / "delivery_channel_configs.json",
+                push_policy_path=database_path.parent / "push_policies.json",
+                audit_log_path=database_path.parent / "config_change_logs.json",
+            )
+        )
 
     def list_source_configs(self) -> list[SourceConfig]:
         with get_connection(self._database_path) as connection:
@@ -371,6 +452,96 @@ class SQLiteConfigStore:
             )
             connection.commit()
 
+    def get_ai_runtime_config(self) -> AIRuntimeConfig:
+        version = self._active_version("ai_runtime_configs")
+        query = """
+            SELECT config_json
+            FROM ai_runtime_configs
+            WHERE config_id = ?
+        """
+        params: list[str] = ["default"]
+        if version:
+            query += " AND version = ?"
+            params.append(version)
+        query += " ORDER BY updated_at DESC, version DESC LIMIT 1"
+
+        with get_connection(self._database_path) as connection:
+            row = connection.execute(query, params).fetchone()
+        if row is not None:
+            return AIRuntimeConfig.model_validate(json.loads(row["config_json"]))
+
+        snapshot = self.get_change_log("ai_runtime_configs", version) if version else None
+        if snapshot is not None:
+            return AIRuntimeConfig.model_validate(snapshot.payload)
+        raise ValueError("missing ai runtime config in sqlite store")
+
+    def replace_ai_runtime_config(self, config: AIRuntimeConfig) -> None:
+        timestamp = _utc_now()
+
+        with get_connection(self._database_path) as connection:
+            connection.execute(
+                "DELETE FROM ai_runtime_configs WHERE config_id = ? AND version = ?",
+                (config.config_id, config.version),
+            )
+            connection.execute(
+                """
+                INSERT INTO ai_runtime_configs (
+                    config_id,
+                    version,
+                    enabled,
+                    provider,
+                    model_name,
+                    prompt_version,
+                    template_path,
+                    endpoint,
+                    api_key,
+                    timeout_seconds,
+                    max_retries,
+                    metadata_json,
+                    config_json,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    config.config_id,
+                    config.version,
+                    int(config.enabled),
+                    config.provider,
+                    config.model_name,
+                    config.prompt_version,
+                    config.template_path,
+                    config.endpoint,
+                    config.api_key,
+                    config.timeout_seconds,
+                    config.max_retries,
+                    json.dumps(config.metadata, ensure_ascii=False),
+                    json.dumps(config.model_dump(mode="json", exclude_none=True), ensure_ascii=False),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            connection.commit()
+
+    def list_delivery_channel_configs(self) -> list[DeliveryChannelConfig]:
+        if self._runtime_store is None:
+            return []
+        return self._runtime_store.list_delivery_channel_configs()
+
+    def get_delivery_channel_config(self, channel: str) -> DeliveryChannelConfig | None:
+        if self._runtime_store is None:
+            return None
+        return self._runtime_store.get_delivery_channel_config(channel)
+
+    def replace_delivery_channel_configs(
+        self,
+        configs: list[DeliveryChannelConfig],
+        version: str,
+    ) -> None:
+        if self._runtime_store is None:
+            raise ValueError("runtime store is not configured for delivery channel configs")
+        self._runtime_store.replace_delivery_channel_configs(configs, version)
+
     def list_push_policies(self) -> list[PushPolicyConfig]:
         version = self._active_version("push_policy_configs")
         query = """
@@ -514,6 +685,7 @@ class SQLiteConfigStore:
 
         table_name = {
             "rule_configs": "rule_configs",
+            "ai_runtime_configs": "ai_runtime_configs",
             "push_policy_configs": "push_policy_configs",
         }.get(config_type)
         if table_name is None:

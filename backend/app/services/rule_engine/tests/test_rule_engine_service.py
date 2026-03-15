@@ -30,6 +30,7 @@ async def test_rule_engine_matches_golden_flow_semantics(
     assert result.candidate_categories == expected.candidate_categories
     assert [rule.rule_id for rule in result.matched_rules] == [rule.rule_id for rule in expected.matched_rules]
     assert result.extracted_signals == expected.extracted_signals
+    assert result.required_profile_facets == expected.required_profile_facets
     assert result.relevance_status == expected.relevance_status
     assert result.relevance_score == expected.relevance_score
     assert result.action_required == expected.action_required
@@ -49,6 +50,7 @@ async def test_rule_engine_result_is_persisted(rule_engine_service: RuleEngineSe
     assert stored is not None
     assert stored.analysis_id == result.analysis_id
     assert stored.relevance_status == result.relevance_status
+    assert stored.required_profile_facets == result.required_profile_facets
 
 
 @pytest.mark.asyncio
@@ -107,3 +109,30 @@ async def test_empty_optional_fields_do_not_break_analysis(
     assert result.event_id == "evt_sparse"
     assert result.relevance_status in {"unknown", "irrelevant"}
     assert isinstance(result.explanation, list)
+
+
+@pytest.mark.asyncio
+async def test_rule_engine_infers_academic_completion_facet_for_credit_gap_notice(
+    rule_engine_service: RuleEngineService,
+    user_profile: UserProfile,
+) -> None:
+    event = SourceEvent(
+        event_id="evt_credit_gap",
+        source_id="manual_input_default",
+        source_type="manual",
+        source_name="manual_input",
+        channel_type="manual",
+        title="培养方案学分缺口提醒",
+        content_text="请尽快核对培养方案模块完成情况和学分缺口，及时完成认定。",
+        content_html=None,
+        author=None,
+        published_at="2026-03-15T09:00:00+08:00",
+        collected_at="2026-03-15T09:00:01+08:00",
+        url=None,
+        attachments=[],
+        metadata={},
+    )
+
+    result = await rule_engine_service.analyze(event, user_profile)
+
+    assert "academic_completion" in result.required_profile_facets

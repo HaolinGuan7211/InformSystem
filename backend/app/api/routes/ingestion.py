@@ -52,10 +52,23 @@ async def ingest_manual(payload: ManualIngestRequest, request: Request) -> dict[
 
 
 @router.post("/ingestion/replay/{event_id}")
-async def replay_event(event_id: str, request: Request) -> dict[str, Any]:
+async def replay_event(
+    event_id: str,
+    request: Request,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     container = get_container(request)
     event = await container.ingestion_service.replay(event_id)
     if event is None:
         raise HTTPException(status_code=404, detail=f"Unknown event_id: {event_id}")
-    return {"success": True, "event": event.model_dump()}
-
+    replay_context = payload or {}
+    result = await container.workflow_orchestrator.run_event(
+        event=event,
+        user_ids=replay_context.get("user_ids"),
+        context=replay_context.get("context"),
+    )
+    return {
+        "success": True,
+        "event": event.model_dump(),
+        "workflow": result.model_dump(),
+    }

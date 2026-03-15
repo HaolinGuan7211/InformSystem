@@ -1,0 +1,22 @@
+{
+  "user_id": "stu_001",
+  "facets": ["identity_core", "graduation_progress"],
+  "payload": {
+    "identity_core": {
+      "student_id": "20260001",
+      "college": "计算机学院",
+      "major": "软件工程",
+      "grade": "2022",
+      "degree_level": "undergraduate",
+      "identity_tags": ["毕业生"]
+    },
+    "graduation_progress": {
+      "graduation_stage": "graduation_review",
+      "current_tasks": ["毕业资格审核"]
+    }
+  },
+  "metadata": {
+    "selector_version": "v1"
+  },
+  "generated_at": "2026-03-13T10:21:30+08:00"
+}

@@ -10,8 +10,78 @@
   "graduation_stage": "graduation_review",
   "enrolled_courses": [],
   "credit_status": {
-    "required_total": 160,
-    "completed_total": 154
+    "program_summary": {
+      "program_name": "2022级软件工程主修培养方案",
+      "required_total_credits": 160.0,
+      "completed_total_credits": 154.0,
+      "outstanding_total_credits": 6.0,
+      "exempted_total_credits": 0.0,
+      "plan_version": "2022"
+    },
+    "module_progress": [
+      {
+        "module_id": "mod_practice_parent",
+        "module_name": "实践模块",
+        "parent_module_id": null,
+        "parent_module_name": null,
+        "module_level": "parent",
+        "required_credits": 16.0,
+        "completed_credits": 12.0,
+        "outstanding_credits": 4.0,
+        "required_course_count": 4,
+        "completed_course_count": 3,
+        "outstanding_course_count": 1,
+        "completion_status": "in_progress",
+        "attention_tags": ["credit_gap", "graduation_related", "practice_based"],
+        "metadata": {}
+      },
+      {
+        "module_id": "mod_practice_child",
+        "module_name": "实践类课程",
+        "parent_module_id": "mod_practice_parent",
+        "parent_module_name": "实践模块",
+        "module_level": "child",
+        "required_credits": 16.0,
+        "completed_credits": 12.0,
+        "outstanding_credits": 4.0,
+        "required_course_count": 4,
+        "completed_course_count": 3,
+        "outstanding_course_count": 1,
+        "completion_status": "in_progress",
+        "attention_tags": ["credit_gap", "graduation_related", "practice_based"],
+        "metadata": {}
+      }
+    ],
+    "pending_items": [
+      {
+        "item_id": "pending_practice_001",
+        "item_type": "practice_requirement",
+        "title": "毕业实习",
+        "module_id": "mod_practice_child",
+        "module_name": "实践类课程",
+        "credits": 4.0,
+        "status": "pending",
+        "priority_hint": "high",
+        "metadata": {}
+      }
+    ],
+    "attention_signals": [
+      {
+        "signal_type": "graduation_requirement_gap",
+        "signal_key": "practice_credit_gap",
+        "signal_value": "4",
+        "severity": "high",
+        "evidence": ["实践类课程未完成", "仍缺 4 学分"]
+      }
+    ],
+    "source_snapshot": {
+      "school_code": "manual",
+      "source_system": "manual_seed",
+      "synced_at": "2026-03-13T10:19:00+08:00",
+      "source_version": "manual_v1",
+      "freshness_status": "fresh",
+      "metadata": {}
+    }
   },
   "current_tasks": ["毕业资格审核"],
   "notification_preference": {

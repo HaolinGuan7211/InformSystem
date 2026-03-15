@@ -18,5 +18,4 @@
 
 - 网站抓取先用 mock 文件模拟
 - scheduler 先提供服务层能力，尚未接 APScheduler/Celery
-- replay 先返回历史事件，后续模块接入后可继续往规则层投递
-
+- replay 已按编排层语义从已存储的 `SourceEvent` 重新进入后续流程，不重新抓取外部平台

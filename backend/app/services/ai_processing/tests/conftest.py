@@ -12,7 +12,7 @@ from backend.app.core.database import init_database
 from backend.app.services.ai_processing.cache import MemoryAICache
 from backend.app.services.ai_processing.field_extractor import FieldExtractor
 from backend.app.services.ai_processing.model_gateway import MockModelGateway
-from backend.app.services.ai_processing.models import AIModelConfig, RuleAnalysisResult, UserProfile
+from backend.app.services.ai_processing.models import AIModelConfig, ProfileContext, RuleAnalysisResult
 from backend.app.services.ai_processing.prompt_builder import PromptBuilder
 from backend.app.services.ai_processing.repositories.ai_analysis_repository import (
     SQLiteAIAnalysisRepository,
@@ -76,8 +76,16 @@ def load_golden():
 def flow_inputs(load_golden):
     return {
         "event": SourceEvent.model_validate(load_golden("01_source_event.json")),
-        "user_profile": UserProfile.model_validate(load_golden("02_user_profile.json")),
         "rule_result": RuleAnalysisResult.model_validate(load_golden("03_rule_analysis_result.json")),
+        "profile_context": ProfileContext.model_validate(
+            _load_json(
+                PROJECT_ROOT
+                / "mocks"
+                / "ai_processing"
+                / "upstream_inputs"
+                / "graduation_material_submission__input__profile_context.json"
+            )
+        ),
     }
 
 
@@ -92,6 +100,7 @@ def build_ai_service(ai_test_settings: Settings, fixed_now: datetime):
         fixture_response: dict[str, Any] | None = None,
         gateway: MockModelGateway | None = None,
         repository: SQLiteAIAnalysisRepository | None = None,
+        model_config_overrides: dict[str, Any] | None = None,
     ) -> tuple[AIProcessingService, SQLiteAIAnalysisRepository, MockModelGateway]:
         repo = repository or SQLiteAIAnalysisRepository(ai_test_settings.database_path)
         mock_gateway = gateway or MockModelGateway(
@@ -108,10 +117,14 @@ def build_ai_service(ai_test_settings: Settings, fixed_now: datetime):
             result_validator=ResultValidator(),
             repository=repo,
             cache=MemoryAICache(),
-            model_config=AIModelConfig(
-                provider=ai_test_settings.ai_provider,
-                model_name=ai_test_settings.ai_model_name,
-                prompt_version=ai_test_settings.ai_prompt_version,
+            model_config=AIModelConfig.model_validate(
+                {
+                    "enabled": True,
+                    "provider": ai_test_settings.ai_provider,
+                    "model_name": ai_test_settings.ai_model_name,
+                    "prompt_version": ai_test_settings.ai_prompt_version,
+                    **(model_config_overrides or {}),
+                }
             ),
             timezone=ai_test_settings.timezone,
             id_factory=lambda: "ai_001",
@@ -121,3 +134,8 @@ def build_ai_service(ai_test_settings: Settings, fixed_now: datetime):
         return ai_service, repo, mock_gateway
 
     return _build
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)

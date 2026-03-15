@@ -11,6 +11,7 @@ from backend.app.services.rule_engine.audience_matcher import AudienceMatcher
 from backend.app.services.rule_engine.config_loader import RuleConfigLoader
 from backend.app.services.rule_engine.models import MatchedRule, RuleAnalysisResult, RuleConfig
 from backend.app.services.rule_engine.preprocessor import EventPreprocessor
+from backend.app.services.rule_engine.profile_facet_resolver import ProfileFacetResolver
 from backend.app.services.rule_engine.repositories.rule_analysis_repository import RuleAnalysisRepository
 from backend.app.services.rule_engine.signal_extractor import SignalExtractor
 from backend.app.services.user_profile.models import UserProfile
@@ -32,6 +33,7 @@ class RuleEngineService:
         audience_matcher: AudienceMatcher,
         action_risk_evaluator: ActionRiskEvaluator,
         ai_trigger_gate: AITriggerGate,
+        profile_facet_resolver: ProfileFacetResolver | None = None,
         repository: RuleAnalysisRepository | None = None,
     ) -> None:
         self._config_loader = config_loader
@@ -40,6 +42,7 @@ class RuleEngineService:
         self._audience_matcher = audience_matcher
         self._action_risk_evaluator = action_risk_evaluator
         self._ai_trigger_gate = ai_trigger_gate
+        self._profile_facet_resolver = profile_facet_resolver or ProfileFacetResolver()
         self._repository = repository
 
     async def analyze(
@@ -73,6 +76,14 @@ class RuleEngineService:
             evaluated_rules=serialized_rules,
             relevance_status=audience_result["relevance_status"],
         )
+        required_profile_facets = self._profile_facet_resolver.resolve(
+            signals=signals,
+            evaluated_rules=serialized_rules,
+            candidate_categories=self._merge_unique(
+                audience_result["candidate_categories"],
+                action_result["candidate_categories"],
+            ),
+        )
 
         result = RuleAnalysisResult(
             analysis_id=self._build_analysis_id(event.event_id, user_profile.user_id, rule_version),
@@ -88,6 +99,7 @@ class RuleEngineService:
                 action_result["matched_rules"],
             ),
             extracted_signals=self._build_extracted_signals(signals),
+            required_profile_facets=required_profile_facets,
             relevance_status=audience_result["relevance_status"],
             relevance_score=audience_result["relevance_score"],
             action_required=action_result["action_required"],
@@ -106,6 +118,8 @@ class RuleEngineService:
             generated_at=context.get("generated_at", event.collected_at),
         )
         result.should_invoke_ai = await ai_trigger_gate.should_invoke_ai(result)
+        if result.relevance_status == "irrelevant":
+            result.required_profile_facets = []
 
         if self._repository is not None:
             await self._repository.save(result)

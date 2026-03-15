@@ -15,5 +15,7 @@
 ## 当前边界
 
 - 发文层只执行 `push_now`、`push_high`、`digest`；`archive` / `ignore` 会被直接跳过
+- 发文层不回头重算渠道；默认只消费 `DecisionResult.delivery_channels`
 - `scheduled` 类型当前先落 `pending` 日志，待编排层在到点后重新调用 `dispatch`
+- 缺失渠道或缺少网关适配器时，会落失败日志而不是直接抛异常吞掉审计
 - 渠道实现先使用 mock 网关，后续可以在 `GatewayManager` 中替换为真实 SDK 适配器

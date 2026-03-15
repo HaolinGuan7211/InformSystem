@@ -1,0 +1,20 @@
+[
+  {
+    "channel": "app_push",
+    "enabled": true,
+    "provider": "mock_app_push",
+    "config": {
+      "provider_message_id": "app_push_default"
+    },
+    "version": "channel_v1"
+  },
+  {
+    "channel": "email",
+    "enabled": true,
+    "provider": "mock_email",
+    "config": {
+      "provider_message_id": "email_default"
+    },
+    "version": "channel_v1"
+  }
+]

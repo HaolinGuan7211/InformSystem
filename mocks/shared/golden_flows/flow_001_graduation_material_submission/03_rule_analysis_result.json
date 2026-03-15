@@ -19,6 +19,7 @@
     "action_keywords": ["提交", "审核材料"],
     "deadline_text": "3月15日前"
   },
+  "required_profile_facets": ["identity_core", "graduation_progress"],
   "relevance_status": "relevant",
   "relevance_score": 0.92,
   "action_required": true,

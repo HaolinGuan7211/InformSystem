@@ -9,6 +9,7 @@
 - `SignalExtractor` 提取动作关键词与截止时间
 - `AudienceMatcher` 结合画像和文本做相关性初判
 - `ActionRiskEvaluator` 评估动作要求、紧急度和风险等级
+- `ProfileFacetResolver` 输出最小够用的 `required_profile_facets`
 - `AITriggerGate` 负责 `should_invoke_ai` 建议位
 - `RuleAnalysisRepository` 把结果写入 SQLite `rule_analysis_results`
 

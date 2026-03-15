@@ -23,6 +23,7 @@ class RuleAnalysisRepository:
                     candidate_categories_json,
                     matched_rules_json,
                     extracted_signals_json,
+                    required_profile_facets_json,
                     relevance_status,
                     relevance_score,
                     action_required,
@@ -34,7 +35,7 @@ class RuleAnalysisRepository:
                     explanation_json,
                     metadata_json,
                     generated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 self._result_to_row(result),
             )
@@ -62,6 +63,7 @@ class RuleAnalysisRepository:
             json.dumps(result.candidate_categories, ensure_ascii=False),
             json.dumps([rule.model_dump() for rule in result.matched_rules], ensure_ascii=False),
             json.dumps(result.extracted_signals, ensure_ascii=False),
+            json.dumps(result.required_profile_facets, ensure_ascii=False),
             result.relevance_status,
             result.relevance_score,
             self._bool_to_int(result.action_required),
@@ -84,6 +86,7 @@ class RuleAnalysisRepository:
             "candidate_categories": json.loads(row["candidate_categories_json"]),
             "matched_rules": json.loads(row["matched_rules_json"]),
             "extracted_signals": json.loads(row["extracted_signals_json"]),
+            "required_profile_facets": json.loads(row["required_profile_facets_json"]),
             "relevance_status": row["relevance_status"],
             "relevance_score": row["relevance_score"],
             "action_required": self._int_to_bool(row["action_required"]),

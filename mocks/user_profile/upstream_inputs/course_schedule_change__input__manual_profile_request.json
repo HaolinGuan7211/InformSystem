@@ -23,9 +23,80 @@
     }
   ],
   "credit_status": {
-    "required_total": 160,
-    "completed_total": 88,
-    "pending_core_courses": ["CS305"]
+    "program_summary": {
+      "program_name": "2023级数据科学与大数据技术主修培养方案",
+      "required_total_credits": 160.0,
+      "completed_total_credits": 88.0,
+      "outstanding_total_credits": 72.0,
+      "exempted_total_credits": 0.0,
+      "plan_version": "2023"
+    },
+    "module_progress": [
+      {
+        "module_id": "mod_major_parent",
+        "module_name": "专业模块",
+        "parent_module_id": null,
+        "parent_module_name": null,
+        "module_level": "parent",
+        "required_credits": 100.0,
+        "completed_credits": 76.0,
+        "outstanding_credits": 24.0,
+        "required_course_count": null,
+        "completed_course_count": null,
+        "outstanding_course_count": null,
+        "completion_status": "in_progress",
+        "attention_tags": ["credit_gap"],
+        "metadata": {}
+      },
+      {
+        "module_id": "mod_major_child",
+        "module_name": "专业核心课",
+        "parent_module_id": "mod_major_parent",
+        "parent_module_name": "专业模块",
+        "module_level": "child",
+        "required_credits": 48.0,
+        "completed_credits": 40.0,
+        "outstanding_credits": 8.0,
+        "required_course_count": 12,
+        "completed_course_count": 11,
+        "outstanding_course_count": 1,
+        "completion_status": "in_progress",
+        "attention_tags": ["credit_gap", "course_gap"],
+        "metadata": {}
+      }
+    ],
+    "pending_items": [
+      {
+        "item_id": "pending_core_cs305",
+        "item_type": "course_gap",
+        "title": "机器学习导论",
+        "module_id": "mod_major_child",
+        "module_name": "专业核心课",
+        "credits": 3.0,
+        "status": "pending",
+        "priority_hint": "medium",
+        "metadata": {
+          "course_id": "CS305"
+        }
+      }
+    ],
+    "attention_signals": [
+      {
+        "signal_type": "credit_gap",
+        "signal_key": "major_core_gap",
+        "signal_value": "8",
+        "severity": "medium",
+        "evidence": ["专业核心课未完成", "仍缺 8 学分"]
+      }
+    ],
+    "source_snapshot": {
+      "school_code": "manual",
+      "source_system": "manual_seed",
+      "synced_at": "2026-03-13T10:19:00+08:00",
+      "source_version": "manual_v1",
+      "freshness_status": "fresh",
+      "metadata": {}
+    }
   },
   "current_tasks": ["确认第5周调课安排"],
   "notification_preference": {

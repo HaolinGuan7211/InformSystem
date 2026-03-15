@@ -7,7 +7,7 @@ from backend.app.services.ai_processing.result_validator import ResultValidation
 
 
 @pytest.mark.asyncio
-async def test_result_validator_clamps_confidence_and_marks_review() -> None:
+async def test_result_validator_clamps_confidence_marks_review_and_normalizes_relevance_hint() -> None:
     validator = ResultValidator(low_confidence_threshold=0.6, low_field_confidence_threshold=0.4)
     raw_result = AIAnalysisResult(
         ai_result_id="ai_test",
@@ -15,13 +15,17 @@ async def test_result_validator_clamps_confidence_and_marks_review() -> None:
         user_id="stu_001",
         model_name="gpt-5-mini",
         prompt_version="prompt_v1",
-        summary="  需要补交材料  ",
+        summary="  需要补交材料 ",
         normalized_category=" graduation_material_submission ",
         action_items=["提交材料", "提交材料", " "],
         extracted_fields=[
-            AIExtractedField(field_name=" deadline_at ", field_value="2026-03-15T23:59:59+08:00", confidence=-0.2)
+            AIExtractedField(
+                field_name=" deadline_at ",
+                field_value="2026-03-15T23:59:59+08:00",
+                confidence=-0.2,
+            )
         ],
-        relevance_hint="  高度相关 ",
+        relevance_hint=" 面向毕业生，与你当前身份高度相关 ",
         urgency_hint=None,
         risk_hint=None,
         confidence=1.2,
@@ -39,6 +43,7 @@ async def test_result_validator_clamps_confidence_and_marks_review() -> None:
     assert validated.summary == "需要补交材料"
     assert validated.normalized_category == "graduation_material_submission"
     assert validated.action_items == ["提交材料"]
+    assert validated.relevance_hint == "relevant"
 
 
 @pytest.mark.asyncio

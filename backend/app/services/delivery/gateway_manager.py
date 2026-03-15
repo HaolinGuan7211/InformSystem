@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from backend.app.services.delivery.gateways.base import DeliveryChannelGateway
+from backend.app.services.delivery.gateways.base import (
+    DeliveryChannelGateway,
+    UnsupportedDeliveryChannelError,
+)
 from backend.app.services.delivery.gateways.mock_app_push import MockAppPushGateway
 from backend.app.services.delivery.gateways.mock_email import MockEmailGateway
 
@@ -16,5 +19,5 @@ class GatewayManager:
     def get_gateway(self, channel: str) -> DeliveryChannelGateway:
         gateway = self._gateways.get(channel)
         if gateway is None:
-            raise ValueError(f"Unsupported delivery channel: {channel}")
+            raise UnsupportedDeliveryChannelError(channel)
         return gateway

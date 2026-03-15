@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.app.services.ingestion.connectors import (
     Connector,
     ManualConnector,
+    SzuBoardConnector,
     WecomWebhookConnector,
     WebsiteHtmlConnector,
 )
@@ -14,6 +15,7 @@ class ConnectorManager:
         self._connectors: dict[str, Connector] = {}
         self.register("wecom_webhook", WecomWebhookConnector(normalizer))
         self.register("website_html", WebsiteHtmlConnector(normalizer))
+        self.register("szu_board_authenticated", SzuBoardConnector(normalizer))
         self.register("manual_input", ManualConnector(normalizer))
 
     def register(self, connector_type: str, connector: Connector) -> None:
@@ -24,4 +26,3 @@ class ConnectorManager:
             return self._connectors[connector_type]
         except KeyError as exc:
             raise KeyError(f"Unsupported connector_type: {connector_type}") from exc
-

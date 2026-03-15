@@ -15,6 +15,7 @@ from backend.app.services.user_profile.course_sync_adapter import CourseSyncAdap
 from backend.app.services.user_profile.credit_status_manager import CreditStatusManager
 from backend.app.services.user_profile.graduation_status_manager import GraduationStatusManager
 from backend.app.services.user_profile.preference_manager import PreferenceManager
+from backend.app.services.user_profile.profile_context_selector import ProfileContextSelector
 from backend.app.services.user_profile.repositories import SQLiteUserProfileRepository
 from backend.app.services.user_profile.service import UserProfileService
 from backend.app.services.user_profile.snapshot_builder import SnapshotBuilder
@@ -64,10 +65,12 @@ def snapshot_builder(user_profile_repository: SQLiteUserProfileRepository) -> Sn
 def user_profile_service(
     user_profile_repository: SQLiteUserProfileRepository,
     snapshot_builder: SnapshotBuilder,
+    user_profile_test_settings: Settings,
 ) -> UserProfileService:
     return UserProfileService(
         repository=user_profile_repository,
         snapshot_builder=snapshot_builder,
+        profile_context_selector=ProfileContextSelector(user_profile_test_settings.timezone),
     )
 
 

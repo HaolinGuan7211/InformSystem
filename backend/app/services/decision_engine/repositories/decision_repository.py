@@ -34,21 +34,6 @@ class SQLiteDecisionRepository:
                     metadata_json,
                     generated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(event_id, user_id, policy_version) DO UPDATE SET
-                    decision_id = excluded.decision_id,
-                    relevance_status = excluded.relevance_status,
-                    priority_score = excluded.priority_score,
-                    priority_level = excluded.priority_level,
-                    decision_action = excluded.decision_action,
-                    delivery_timing = excluded.delivery_timing,
-                    delivery_channels_json = excluded.delivery_channels_json,
-                    action_required = excluded.action_required,
-                    deadline_at = excluded.deadline_at,
-                    reason_summary = excluded.reason_summary,
-                    explanations_json = excluded.explanations_json,
-                    evidences_json = excluded.evidences_json,
-                    metadata_json = excluded.metadata_json,
-                    generated_at = excluded.generated_at
                 """,
                 self._result_to_row(result),
             )
@@ -67,12 +52,61 @@ class SQLiteDecisionRepository:
             query += " AND policy_version = ?"
             params.append(policy_version)
 
-        query += " ORDER BY generated_at DESC LIMIT 1"
+        query += f" ORDER BY {self._latest_order_clause()} LIMIT 1"
 
         with get_connection(self.database_path) as connection:
             row = connection.execute(query, tuple(params)).fetchone()
 
         return self._row_to_result(row) if row else None
+
+    async def get_by_decision_id(self, decision_id: str) -> DecisionResult | None:
+        with get_connection(self.database_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM decision_results WHERE decision_id = ? LIMIT 1",
+                (decision_id,),
+            ).fetchone()
+        return self._row_to_result(row) if row else None
+
+    async def list_by_event_and_user(
+        self,
+        event_id: str,
+        user_id: str,
+        policy_version: str | None = None,
+        limit: int | None = None,
+    ) -> list[DecisionResult]:
+        query = "SELECT * FROM decision_results WHERE event_id = ? AND user_id = ?"
+        params: list[object] = [event_id, user_id]
+
+        if policy_version is not None:
+            query += " AND policy_version = ?"
+            params.append(policy_version)
+
+        query += f" ORDER BY {self._latest_order_clause()}"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        with get_connection(self.database_path) as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+
+        return [self._row_to_result(row) for row in rows]
+
+    async def list_by_event(
+        self,
+        event_id: str,
+        limit: int | None = None,
+    ) -> list[DecisionResult]:
+        query = "SELECT * FROM decision_results WHERE event_id = ?"
+        params: list[object] = [event_id]
+        query += f" ORDER BY {self._latest_order_clause()}"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        with get_connection(self.database_path) as connection:
+            rows = connection.execute(query, tuple(params)).fetchall()
+
+        return [self._row_to_result(row) for row in rows]
 
     def _result_to_row(self, result: DecisionResult) -> tuple[object, ...]:
         return (
@@ -115,3 +149,7 @@ class SQLiteDecisionRepository:
             metadata=json.loads(row["metadata_json"]),
             generated_at=row["generated_at"],
         )
+
+    @staticmethod
+    def _latest_order_clause() -> str:
+        return "generated_at DESC, rowid DESC"

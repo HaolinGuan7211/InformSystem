@@ -77,6 +77,7 @@
 - `rule_configs`
 - `push_policy_configs`
 - `notification_category_configs`
+- `ai_runtime_configs`
 
 ---
 
@@ -212,6 +213,17 @@
 
 - upsert
 
+结构约束补充：
+
+- `credit_status_json` 必须对齐 `01_shared_schemas.md` 中冻结的内部结构，至少包含：
+  - `program_summary`
+  - `module_progress`
+  - `pending_items`
+  - `attention_signals`
+  - `source_snapshot`
+- 学校侧原始字段如 `PYFADM`、`KZH`、`FKZH` 不得提升为 `user_profiles` 的一级列，只能停留在 `credit_status_json[*].metadata` 或 `metadata_json`
+- `enrolled_courses` 对应的当前课程快照仍存于 `user_course_enrollments`，不得把全量培养方案课程明细混写进 `user_course_enrollments`
+
 ---
 
 ### 5.4 `user_course_enrollments`
@@ -308,6 +320,7 @@
 - `candidate_categories_json` `jsonb`
 - `matched_rules_json` `jsonb`
 - `extracted_signals_json` `jsonb`
+- `required_profile_facets_json` `jsonb`
 - `relevance_status` `text`
 - `relevance_score` `numeric`
 - `action_required` `boolean null`
@@ -329,6 +342,11 @@
 写入策略：
 
 - append-only
+
+结构约束补充：
+
+- `required_profile_facets_json` 中的值必须来自共享协议中的 `profile_facet` 枚举
+- `required_profile_facets_json` 用于驱动后续 `ProfileContextSelector` 生成最小相关画像上下文，不得被替换进 `metadata_json`
 
 ---
 
@@ -439,7 +457,41 @@
 
 ---
 
-### 5.12 `decision_results`
+### 5.12 `ai_runtime_configs`
+
+用途：
+
+- 存储 AI runtime 配置快照
+
+关键字段建议：
+
+- `config_id` `text`
+- `version` `text`
+- `enabled` `boolean`
+- `provider` `text`
+- `model_name` `text`
+- `prompt_version` `text`
+- `template_path` `text`
+- `endpoint` `text null`
+- `api_key` `text null`
+- `timeout_seconds` `numeric`
+- `max_retries` `int`
+- `metadata_json` `jsonb`
+- `created_at` `timestamptz`
+- `updated_at` `timestamptz`
+
+约束建议：
+
+- 复合唯一键：`config_id + version`
+- 索引：`config_id`, `version`
+
+写入策略：
+
+- append new version, active version driven by `config_change_logs`
+
+---
+
+### 5.13 `decision_results`
 
 用途：
 
@@ -477,7 +529,7 @@
 
 ---
 
-### 5.13 `delivery_logs`
+### 5.14 `delivery_logs`
 
 用途：
 
@@ -510,7 +562,7 @@
 
 ---
 
-### 5.14 `delivery_digest_jobs`
+### 5.15 `delivery_digest_jobs`
 
 用途：
 
@@ -533,7 +585,7 @@
 
 ---
 
-### 5.15 `user_feedback`
+### 5.16 `user_feedback`
 
 用途：
 
@@ -563,7 +615,7 @@
 
 ---
 
-### 5.16 `optimization_samples`
+### 5.17 `optimization_samples`
 
 用途：
 
@@ -590,7 +642,7 @@
 
 ---
 
-### 5.17 `config_change_logs`
+### 5.18 `config_change_logs`
 
 用途：
 
@@ -659,4 +711,3 @@
 **数据库 schema 文档的核心作用，是冻结跨模块持久化关系与关键字段设计，避免并行开发时表结构各自长成不同样子。**
 
 ---
-
