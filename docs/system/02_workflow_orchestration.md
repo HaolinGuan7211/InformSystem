@@ -19,7 +19,7 @@
 
 ## 15. 相关性筛选架构调整补充（2026-03-15）
 
-本文件补充冻结以下主链路调整，详细说明见 [07_relevance_filtering_architecture_adjustment.md](/D:/InformSystem/07_relevance_filtering_architecture_adjustment.md)。
+本文件补充冻结以下主链路调整，详细说明见 [07_relevance_filtering_architecture_adjustment.md](/D:/InformSystem/docs/system/07_relevance_filtering_architecture_adjustment.md)。
 
 ### 15.1 新的阶段语义
 
@@ -381,7 +381,7 @@ backend/app/pipelines/
 
 当前仓库虽然保留面向未来多用户扩展的主链路语义，但在 **当前阶段**，系统实际定位为个人单用户工具。
 
-因此，当前实现和后续近期迭代应优先遵循 [08_current_phase_personal_tool_architecture.md](/D:/InformSystem/08_current_phase_personal_tool_architecture.md) 中定义的阶段性方案：
+因此，当前实现和后续近期迭代应优先遵循 [08_current_phase_personal_tool_architecture.md](/D:/InformSystem/docs/system/08_current_phase_personal_tool_architecture.md) 中定义的阶段性方案：
 
 - 规则层只做轻量硬筛
 - LLM 第一阶段只消费简单画像 tag 做粗筛

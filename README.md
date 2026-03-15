@@ -1,163 +1,124 @@
 # InformSystem
 
-校园通知智能筛选系统。
+`InformSystem` 是一个面向个人使用的校园通知筛选工具。
 
-这个仓库当前包含两部分内容：
+它的目标不是单纯收集通知，而是把校园里的大量信息进一步分成：
 
-- 一套完整的 contract-first 系统文档，用来约束模块边界、共享对象和联调方式
-- 一套可运行的后端原型实现，覆盖接入、规则、AI、决策、发文、画像、配置和反馈八个模块
+- 需要你尽快处理的
+- 值得保留关注的
+- 大概率与你无关的
 
-项目目标不是简单聚合通知，而是围绕学生个人状态，从多源校园通知中筛出真正相关、真正需要行动、真正值得打扰的内容。
+当前系统已经具备一条完整可运行的链路：接入通知、维护个人画像、结合规则与 AI 判断相关性、给出动作结果，并保留分析记录。
 
-## 仓库重点
+## 它现在能做什么
 
-- 系统总纲：`00_system_overview.md`
-- 共享协议：`01_shared_schemas.md`
-- 主链路编排：`02_workflow_orchestration.md`
-- Mock 与联调约定：`04_mock_and_integration_conventions.md`
-- 数据库契约：`05_database_schema.md`
-- 模块详细设计：`docs/modules/`
-- 模块线程提示词：`docs/thread_prompts/`
-- 跨模块 golden flow：`mocks/shared/golden_flows/`
+### 过滤校园通知
 
-## 当前模块
+系统会对通知做多层判断，尽量把真正重要的内容留下来，把明显无关的内容压下去。
 
-- `Ingestion`
-- `Rule Engine`
-- `AI Processing`
-- `Decision Engine`
-- `Delivery`
-- `User Profile`
-- `Config`
-- `Feedback`
+当前输出的动作包括：
 
-## 当前实现定位
+- `push_now`
+- `push_high`
+- `digest`
+- `archive`
+- `ignore`
 
-当前仓库是第一阶段的模块化单体原型：
+### 结合你的个人信息做判断
 
-- API 框架：`FastAPI`
-- 本地开发持久化：`SQLite`
-- 文档目标架构：`PostgreSQL + Redis + Celery + Docker Compose`
+系统可以利用个人画像来判断通知是否真的值得你关注。
 
-说明：
+当前可用的画像信息包括：
 
-- 文档中的系统目标架构是后续正式落地方向
-- 当前代码实现优先服务于模块边界收口、mock 联调和本地可运行闭环
+- 学号、姓名、学院、专业、年级
+- 身份标签与毕业阶段
+- 当前课程与当前任务
+- 学业完成状态、模块缺口、毕业进度
+- 通知偏好
 
-## 目录结构
+### 支持真实通知导入与本地运行
 
-```text
-backend/
-  app/
-    api/
-    core/
-    shared/
-    services/
-      ingestion/
-      rule_engine/
-      ai_processing/
-      decision_engine/
-      delivery/
-      user_profile/
-      config/
-      feedback/
-docs/
-  modules/
-  thread_prompts/
-mocks/
-  ingestion/
-  rule_engine/
-  ai_processing/
-  decision_engine/
-  delivery/
-  user_profile/
-  config/
-  feedback/
-  shared/golden_flows/
-scripts/
-```
+系统支持：
 
-## 文档阅读顺序
+- 手工导入通知
+- 重放已有通知并重新判断
+- 低频接入部分真实校园通知来源
 
-如果你要理解系统或接手某个模块，建议按这个顺序看：
+它适合做个人日常使用和低频验证，不适合高频抓取学校站点。
 
-1. `00_system_overview.md`
-2. `01_shared_schemas.md`
-3. `02_workflow_orchestration.md`
-4. `05_database_schema.md`
-5. `04_mock_and_integration_conventions.md`
-6. `docs/modules/<模块文档>`
-7. `docs/thread_prompts/<对应线程提示词>`
+### 保留判断结果，方便回看
 
-## 本地运行
+系统会保存：
+
+- 原始通知事件
+- 规则分析结果
+- AI 分析结果
+- 决策结果
+- 投递记录
+- 反馈样本
+
+这样你不仅能看到结果，也能回头检查系统为什么这样判断。
+
+## 适合怎样使用
+
+当前这套系统最适合单用户场景，也就是把它当成你自己的校园通知助手：
+
+- 帮你从大量通知里找出真正需要看的内容
+- 减少外学院公示、内部事务、教职工通知这类噪音
+- 对开放机会、课程、讲座、学业相关通知做进一步筛选
+
+## 当前边界
+
+这套系统已经能用，但仍有几个现实边界：
+
+- 不建议高频抓取学校站点
+- 判断质量依赖个人画像的完整度
+- 公共信息、开放机会、基础设施通知这类边界样本仍在持续调优
+- 当前更适合个人使用，不是正式的大规模消息平台
+
+## 快速开始
+
+### 安装依赖
 
 ```bash
 pip install -e .[dev]
+```
+
+### 启动服务
+
+```bash
 uvicorn backend.app.main:app --reload
 ```
 
-启动后可访问：
-
-- `GET /health`
-- `POST /api/v1/webhooks/{source_id}`
-- `POST /api/v1/ingestion/manual`
-- `POST /api/v1/ingestion/replay/{event_id}`
-- `GET /api/v1/users/active`
-- `GET /api/v1/users/{user_id}/profile`
-- `PUT /api/v1/users/{user_id}/profile`
-- `POST /api/v1/feedback`
-- `POST /api/v1/feedback/delivery-outcomes`
-- `GET /api/v1/feedback/optimization-samples`
-
-## 本地 demo
-
-```bash
-python scripts/demo_ingestion.py
-```
-
-## 测试
-
-运行全量测试：
+### 运行测试
 
 ```bash
 pytest
 ```
 
-如果只想跑某个模块：
+## 推荐用法
 
-```bash
-pytest backend/app/services/ingestion/tests
-pytest backend/app/services/rule_engine/tests
-pytest backend/app/services/decision_engine/tests
+### 本地跑完整链路
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_system_demo.ps1 -Mode local
 ```
 
-## Mock 与联调
+### 导入并判断一批通知
 
-仓库采用 `Contract-First + Mock-Driven Development`。
+```powershell
+python scripts\probe_szu_board_for_user.py --max-items 10 --request-delay-seconds 1.2
+```
 
-关键约定：
+这个脚本会：
 
-- 模块各自维护自己的输入输出 mock
-- `mocks/shared/golden_flows/` 下的样例是跨模块联调权威样例
-- 如果共享对象变更，先改 `01_shared_schemas.md`，再改模块文档和 mock
+- 导入一批通知
+- 使用本地画像跑完整判断链路
+- 输出汇总结果和本地数据文件
 
-## 当前开发约束
+## 关键文档
 
-- 不要跨模块偷改共享对象语义
-- 不要把最终决策逻辑塞进非决策层
-- 不要把用户枚举逻辑塞进规则层
-- 不要让 AI 成为主链路单点依赖
-- 不要把本地数据库、缓存和构建产物提交到仓库
-
-## Git 说明
-
-本仓库已经初始化 Git。
-
-默认不提交的内容包括：
-
-- `__pycache__/`
-- `.pytest_cache/`
-- `backend/data/`
-- `*.db`
-- `*.egg-info/`
-
+- [00_system_overview.md](D:/InformSystem/docs/system/00_system_overview.md)
+- [01_shared_schemas.md](D:/InformSystem/docs/system/01_shared_schemas.md)
+- [02_workflow_orchestration.md](D:/InformSystem/docs/system/02_workflow_orchestration.md)
+- [05_database_schema.md](D:/InformSystem/docs/system/05_database_schema.md)
